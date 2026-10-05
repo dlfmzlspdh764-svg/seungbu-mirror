@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex"><title>실시간 스포츠 승리 확률</title>
+<!-- installable app (PWA): manifest + icons + iOS home-screen tags -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f1420">
+<meta name="application-name" content="승부예측">
+<link rel="icon" type="image/png" sizes="32x32" href="static/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="static/icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="승부예측">
+<meta name="format-detection" content="telephone=no">
+<script>window.WINPROB_MIRROR={"site":"https://dlfmzlspdh764-svg.github.io/seungbu-mirror/","data":"https://raw.githubusercontent.com/dlfmzlspdh764-svg/seungbu-mirror/data/","live":"https://seungbu.taila9a748.ts.net"};</script>
+<script src="static/pwa.js"></script>
+<style>
+  /* ================= design tokens ================= */
+  :root {
+    --bg:#0f1420; --bg-2:#0c111b; --surface:#161e2e; --surface-2:#1b2537; --surface-3:#222d43; --inset:#101828;
+    --border:#263149; --border-2:#34425f; --divider:#1f2a40;
+    --text:#e9eef7; --text-2:#c3cddd; --muted:#95a1b5; --faint:#6c788d;
+    --accent:#4f7cff; --accent-2:#8fb0ff; --accent-bg:#1c2a4f;
+    --good:#34d399; --good-bg:#10331f; --bad:#f87171; --bad-bg:#3a1a1d; --warn:#fbbf24; --warn-bg:#2d2410;
+    --hot:#fb923c; --hot-bg:#33200f; --info:#7cc4ff; --purple:#c4a5ff;
+    --home:#e0483e; --away:#2f6fde; --draw:#9aa3ad;
+    --r-xs:6px; --r-sm:8px; --r:12px; --r-lg:16px; --r-pill:999px;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px;
+    --fs-2xs:10.5px; --fs-xs:11.5px; --fs-sm:12.5px; --fs:14px; --fs-md:15px; --fs-lg:17px; --fs-xl:20px;
+    --tap:44px; --stick-h:104px; --tabbar-h:0px;
+    --shadow-1:0 1px 2px #0006; --shadow-2:0 10px 30px #000a;
+    --font:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Noto Sans CJK KR","Malgun Gothic","맑은 고딕","Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --ease:cubic-bezier(.2,.8,.2,1);
+    color-scheme: dark;
+  }
+  * { box-sizing:border-box; }
+  html, body { max-width:100%; overflow-x:hidden; }
+  body { margin:0; font-family:var(--font); font-size:var(--fs); line-height:1.5; background:var(--bg); color:var(--text);
+    -webkit-font-smoothing:antialiased; -webkit-tap-highlight-color:transparent; word-break:keep-all; overflow-wrap:anywhere;
+    font-variant-numeric:tabular-nums; }
+  button, input, select, textarea { font-family:inherit; }
+  a { color:var(--info); }
+  :focus-visible { outline:2px solid var(--accent-2); outline-offset:2px; }
+  [hidden] { display:none !important; }
+  .muted { color:var(--muted); font-size:var(--fs-sm); }
+  .sub { font-size:var(--fs-xs); color:var(--muted); }
+  .good { color:var(--good); font-weight:600; } .ok { color:var(--good); } .bad { color:var(--bad); }
+  .up { color:var(--good); } .down { color:var(--bad); }
+  .sm, .muted.sm { font-size:var(--fs-2xs); }
+  .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+  /* ================= app bar + tabs (sticky) ================= */
+  .stick { position:sticky; top:0; z-index:30; background:color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter:saturate(1.4) blur(10px); -webkit-backdrop-filter:saturate(1.4) blur(10px); border-bottom:1px solid var(--divider);
+    padding-top:env(safe-area-inset-top); }
+  header.appbar { display:flex; align-items:center; gap:var(--s2); padding:6px 16px 2px; min-height:50px; }
+  .brand { display:flex; align-items:center; gap:8px; min-width:0; flex:1; }
+  .brand img { width:28px; height:28px; border-radius:8px; flex:0 0 auto; }
+  h1 { font-size:var(--fs-lg); margin:0; font-weight:800; letter-spacing:-.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fresh { display:inline-flex; align-items:center; gap:5px; font-size:var(--fs-xs); color:var(--muted); white-space:nowrap;
+    padding:3px 9px; border-radius:var(--r-pill); background:var(--surface-2); border:1px solid var(--border); max-width:48vw; overflow:hidden; text-overflow:ellipsis; }
+  .fresh i { width:7px; height:7px; border-radius:50%; background:var(--faint); flex:0 0 auto; }
+  .fresh.ok i { background:var(--good); box-shadow:0 0 0 3px #34d39922; } .fresh.warn i { background:var(--warn); } .fresh.stale i { background:var(--bad); }
+  .fresh.stale { color:#fecaca; border-color:#7f1d1d; }
+  #countdown { display:none; }
+  .icon-btn { position:relative; flex:0 0 auto; width:var(--tap); height:var(--tap); display:inline-flex; align-items:center; justify-content:center;
+    background:transparent; border:0; border-radius:var(--r); color:var(--text); font-size:21px; cursor:pointer; }
+  .icon-btn:active { background:var(--surface-2); }
+  .badge { position:absolute; top:5px; right:4px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--bad);
+    color:#fff; font-size:11px; font-weight:800; line-height:18px; text-align:center; box-shadow:0 0 0 2px var(--bg); }
+  .install-btn { flex:0 0 auto; min-height:36px; background:var(--accent); color:#fff; border:0; border-radius:var(--r-pill); padding:6px 12px;
+    font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .install-btn:active { transform:scale(.97); }
+  nav#tabs { display:flex; gap:6px; padding:4px 16px 8px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:none; scroll-snap-type:x proximity; }
+  nav#tabs::-webkit-scrollbar, .filters::-webkit-scrollbar { display:none; }
+  nav#tabs button { flex:0 0 auto; white-space:nowrap; min-height:var(--tap); padding:0 14px; border-radius:var(--r-pill); font-size:var(--fs);
+    font-weight:600; background:var(--surface); color:var(--text-2); border:1px solid var(--border); cursor:pointer; scroll-snap-align:start;
+    transition:background .15s, color .15s, border-color .15s; }
+  nav#tabs button.active { background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 4px 14px #4f7cff44; }
+
+  /* bottom tab bar (mobile) */
+  .tabbar { display:none; }
+  @media (max-width: 760px) {
+    :root { --tabbar-h:calc(58px + env(safe-area-inset-bottom)); }
+    .tabbar { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; position:fixed; left:0; right:0; bottom:0; z-index:35;
+      background:color-mix(in srgb, var(--bg-2) 94%, transparent); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+      border-top:1px solid var(--divider); padding:4px 4px env(safe-area-inset-bottom); }
+    .tabbar button { position:relative; min-height:50px; background:none; border:0; color:var(--muted); display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:1px; font-size:10.5px; font-weight:600; cursor:pointer; border-radius:var(--r); }
+    .tabbar button .ic { font-size:19px; line-height:1.1; filter:grayscale(.6); opacity:.85; }
+    .tabbar button.active { color:var(--text); } .tabbar button.active .ic { filter:none; opacity:1; }
+    .tabbar button.active::before { content:""; position:absolute; top:0; width:26px; height:3px; border-radius:2px; background:var(--accent); }
+    .tabbar .badge { top:2px; right:calc(50% - 22px); }
+    body { padding-bottom:var(--tabbar-h); }
+  }
+
+  /* ================= notices ================= */
+  details.disclaimer { margin:10px 16px 4px; border-radius:var(--r); background:var(--warn-bg); border:1px solid #6b5212; color:#fde3a0; font-size:var(--fs-xs); }
+  details.disclaimer > summary { list-style:none; cursor:pointer; min-height:var(--tap); display:flex; align-items:center; gap:6px; padding:0 12px; font-weight:600; }
+  details.disclaimer > summary::-webkit-details-marker { display:none; }
+  details.disclaimer > summary::after { content:"자세히 ▾"; margin-left:auto; color:#e7c66a; font-weight:500; }
+  details.disclaimer[open] > summary::after { content:"접기 ▴"; }
+  details.disclaimer > div { padding:0 12px 10px; line-height:1.6; }
+  .offline-bar { position:sticky; top:var(--stick-h, 0px); z-index:30; margin:8px 16px 0; padding:8px 12px; border-radius:var(--r-sm); background:var(--bad-bg); border:1px solid #b8333a; color:#fecaca; font-size:13px; font-weight:600; box-shadow:0 2px 10px rgba(0,0,0,.35); }
+  .offline-bar .ob-l2 { margin-top:3px; font-weight:400; font-size:12px; color:#fbd5d5; line-height:1.5; }
+  .offline-bar .ob-btn { margin-left:4px; padding:2px 10px; min-height:28px; border-radius:12px; border:1px solid #f0a0a5; background:transparent; color:#fff; font-size:12px; font-weight:600; }
+  .offline-bar.mirror { background:rgba(59,130,246,.16); border-color:#3b82f6; color:#dbeafe; } .offline-bar.mirror .ob-l2 { color:#cfe0ff; } .offline-bar.mirror .ob-btn { border-color:#93c5fd; }
+  .offline-bar.recovered { background:rgba(34,197,94,.14); border-color:#22c55e; color:#bbf7d0; }
+  details.pexcl { margin-top:4px; } details.pexcl > summary { cursor:pointer; padding:4px 0; }
+  .refbox { margin-top:8px; padding:8px 10px; border:1px dashed var(--divider); border-radius:var(--r-sm); }
+  .refbox .reftag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:9px; background:rgba(148,163,184,.18); color:var(--muted); margin-right:4px; font-weight:600; }
+  .banner { background:var(--accent-bg); color:#dbe6ff; border:1px solid #33508f; padding:8px 12px; border-radius:var(--r-sm); margin-bottom:8px; font-weight:600; }
+  .pdisc { margin-top:8px; font-size:var(--fs-xs); color:#f5dfa0; background:var(--warn-bg); border:1px solid #4a3b12; border-radius:var(--r-sm); padding:8px 10px; line-height:1.55; }
+  details.pdisc > summary { cursor:pointer; font-weight:600; min-height:32px; display:flex; align-items:center; }
+
+  /* ================= toolbar: search + filter chips ================= */
+  .toolbar { display:flex; align-items:center; gap:8px; padding:10px 16px 0; }
+  .search { position:relative; flex:1; min-width:0; }
+  .search input { width:100%; min-height:var(--tap); padding:0 38px 0 38px; border-radius:var(--r-pill); background:var(--surface); border:1px solid var(--border);
+    color:var(--text); font-size:var(--fs); }
+  .search input::placeholder { color:var(--faint); }
+  .search::before { content:"🔍"; position:absolute; left:13px; top:50%; transform:translateY(-50%); font-size:14px; opacity:.7; pointer-events:none; }
+  .search button { position:absolute; right:2px; top:0; width:var(--tap); height:var(--tap); border:0; background:none; color:var(--muted); font-size:18px; cursor:pointer; }
+  .filters { padding:8px 16px 0; display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; align-items:center; }
+  .filters > * { flex:0 0 auto; white-space:nowrap; }
+  .chip { display:inline-flex; align-items:center; min-height:var(--tap); font-size:13px; padding:0 13px; border-radius:var(--r-pill); background:var(--surface);
+    border:1px solid var(--border); cursor:pointer; color:var(--text-2); user-select:none; }
+  .chip.active { background:var(--accent-bg); border-color:var(--accent); color:#fff; font-weight:600; }
+  .chips .chip, .pmeta .chips .chip { min-height:28px; font-size:var(--fs-xs); padding:0 9px; cursor:default; }
+  .sep { display:inline-block; width:6px; }
+  .toggle { display:inline-flex !important; align-items:center; gap:8px; min-height:var(--tap); padding:0 12px; border-radius:var(--r-pill);
+    background:var(--surface); border:1px solid var(--border); color:var(--text-2) !important; font-size:13px !important; margin:0 !important; cursor:pointer; }
+  .toggle input { width:18px !important; height:18px; accent-color:var(--accent); margin:0; }
+
+  /* ================= layout ================= */
+  main { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:18px; padding:8px 16px 28px; }
+  @media (max-width: 980px) { main { grid-template-columns:1fr; } }
+  .xview { padding:12px 16px 28px; }
+  .view-enter { animation:viewIn .22s var(--ease) both; }
+  @keyframes viewIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) { .view-enter { animation:none; } }
+  h2 { font-size:var(--fs-md); margin:18px 0 10px; display:flex; align-items:center; gap:8px; font-weight:800; letter-spacing:-.2px; }
+  h2 .muted { font-weight:500; }
+  h3 { font-size:var(--fs-md); font-weight:700; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap:12px; }
+  .pgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(460px, 100%), 1fr)); gap:12px; }
+  .empty { color:var(--muted); font-size:13px; padding:18px 14px; text-align:center; background:var(--surface); border:1px dashed var(--border-2); border-radius:var(--r); }
+  .errbox { color:#fecaca; background:var(--bad-bg); border:1px solid #7f1d1d; border-radius:var(--r); padding:14px; font-size:13px; }
+  .errbox button { margin-top:8px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:var(--tap); padding:0 16px; border-radius:var(--r);
+    border:1px solid var(--border-2); background:var(--surface-2); color:var(--text); font-size:var(--fs); font-weight:600; cursor:pointer; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.danger { background:transparent; border-color:#7f1d1d; color:#fca5a5; }
+  .btn.sm { min-height:var(--tap); padding:0 14px; font-size:13px; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .btn:active:not(:disabled) { transform:scale(.98); }
+
+  /* ================= cards ================= */
+  .card, .mc { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:12px 14px; min-width:0; box-shadow:var(--shadow-1); }
+  .grid > .card, .pgrid > .mc { content-visibility:auto; contain-intrinsic-size:auto 360px; }
+  .card.live { border-color:#b8333a; box-shadow:0 0 0 1px #b8333a55; }
+  .mc.flagged { border-color:#b45309; }
+  .top, .mc-h { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:var(--fs-xs); color:var(--muted); margin-bottom:6px; min-width:0; }
+  .top > span:first-child, .mc-h > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hd-r { display:inline-flex; align-items:center; gap:4px; flex:0 0 auto; }
+  .status.live { color:#ff6b6b; font-weight:700; }
+  .team { display:flex; align-items:center; gap:8px; margin:4px 0; font-size:var(--fs-md); min-width:0; }
+  .team img { width:24px; height:24px; object-fit:contain; background:#ffffff10; border-radius:6px; flex:0 0 auto; }
+  .team .nm { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+  .team .tag { font-size:var(--fs-2xs); color:var(--muted); width:28px; flex:0 0 auto; }
+  .team .rec { font-size:var(--fs-2xs); color:var(--muted); }
+  .team .sc { font-size:22px; font-weight:800; min-width:28px; text-align:right; }
+  .team.win .nm { font-weight:800; }
+  .plabel { font-size:var(--fs-xs); color:var(--muted); margin-top:10px; display:flex; justify-content:space-between; }
+  .bar { display:flex; height:24px; border-radius:var(--r-xs); overflow:hidden; margin-top:4px; font-size:var(--fs-xs); font-weight:700; background:var(--inset); }
+  .bar div { display:flex; align-items:center; justify-content:center; white-space:nowrap; overflow:hidden; transition:width .6s var(--ease); color:#fff; }
+  .bar .a { background:var(--away); } .bar .d { background:var(--draw); color:#1b1f27; } .bar .h { background:var(--home); }
+  .bar.small { height:8px; opacity:.55; font-size:0; }
+  .legend { display:flex; justify-content:space-between; font-size:var(--fs-xs); margin-top:4px; gap:6px; }
+  details { margin-top:6px; font-size:var(--fs-xs); color:var(--muted); }
+  details > summary { cursor:pointer; min-height:var(--tap); display:flex; align-items:center; gap:4px; color:var(--accent-2); font-size:var(--fs-sm); font-weight:600; }
+  details code { color:#b9c6dc; }
+  aside .card { margin-bottom:14px; }
+  aside h3 { margin:0 0 8px; font-size:var(--fs-md); }
+  label { display:block; font-size:var(--fs-xs); color:var(--muted); margin:8px 0 3px; }
+  input, select { width:100%; background:var(--inset); color:var(--text); border:1px solid var(--border-2); border-radius:var(--r-sm); padding:8px 10px; font-size:15px; min-height:var(--tap); }
+  .row { display:flex; gap:8px; } .row > div { flex:1; min-width:0; }
+  .cb { display:flex; gap:10px; font-size:13px; margin-top:6px; } .cb label { display:flex; gap:6px; align-items:center; margin:0; color:var(--text); min-height:var(--tap); }
+  .cb input { width:auto; min-height:0; }
+  .explain { font-size:var(--fs-sm); line-height:1.65; color:var(--text-2); }
+  .src { font-size:var(--fs-xs); color:var(--muted); line-height:1.7; }
+  .rc { display:inline-block; width:10px; height:14px; background:#e53935; border-radius:2px; margin-left:3px; vertical-align:-2px; }
+  .info { font-size:var(--fs-xs); color:var(--text-2); margin-top:8px; line-height:1.6; border-top:1px dashed var(--border); padding-top:6px; }
+  .info .warn { color:var(--warn); } .info b { color:var(--text); font-weight:600; }
+  .mkt { font-size:var(--fs-xs); color:var(--text-2); margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .upset { margin-top:8px; font-size:var(--fs-xs); padding:7px 9px; border-radius:var(--r-sm); background:var(--hot-bg); border:1px solid #8a6414; color:#ffd98a; }
+  .upset.watch { background:#1f2540; border-color:#44507a; color:#c9d4ff; }
+  table.fac { width:100%; border-collapse:collapse; margin-top:4px; font-size:var(--fs-2xs); }
+  table.fac td { border-top:1px solid var(--border); padding:4px; vertical-align:top; color:var(--text-2); word-break:keep-all; overflow-wrap:anywhere; }
+  table.fac td.eff { white-space:nowrap; text-align:right; } table.fac td:first-child { width:92px; }
+  .st-reflected { color:var(--good); } .st-info { color:#9fb3d9; } .st-unavailable { color:var(--muted); }
+  .rec { margin-top:8px; font-size:var(--fs-xs); background:#0f1d33; border:1px solid #1e3a5f; border-radius:var(--r-sm); padding:7px 9px; line-height:1.6; }
+  .mc-t { font-size:var(--fs-lg); font-weight:800; margin:2px 0 4px; overflow-wrap:anywhere; letter-spacing:-.2px; }
+  .mc-t .vs { color:var(--muted); font-weight:500; font-size:var(--fs-sm); margin:0 6px; }
+  .mc-app { font-size:var(--fs-xs); color:#a5b4fc; }
+  .mc-src { font-size:var(--fs-xs); color:var(--muted); margin-top:2px; }
+  .mc-score { font-size:var(--fs-xs); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .mc-score b { color:var(--fg, inherit); }
+  .mc-score .scp-a, .mc-score .scp-r { font-size:10px; padding:0 5px; border-radius:8px; margin-left:3px; } .mc-score .scp-a { background:#facc15; color:#111; } .mc-score .scp-r { border:1px solid var(--muted); color:var(--muted); }
+  .srcl { display:inline-block; padding:1px 7px; border-radius:var(--r-pill); font-size:var(--fs-2xs); background:var(--surface-3); color:#cbd5e1; margin:1px 2px; font-weight:600; }
+  .src-app { color:#a5b4fc; } .srcl.src-app { background:#1e1b4b; } .src-dk { color:#67e8f9; } .srcl.src-dk { background:#083344; }
+  .src-rt { color:#86efac; } .srcl.src-rt { background:#052e16; } .src-mk { color:#fcd34d; } .srcl.src-mk { background:#2a2310; }
+  .src-none { color:var(--bad); }
+  .srcb { display:inline-block; margin:2px 6px 2px 0; padding:2px 8px; border-radius:var(--r-pill); background:var(--surface-3); font-size:var(--fs-xs); }
+  .srcb.act { background:#14532d; color:#bbf7d0; } .srcb.bad { background:#3f1d1d; color:#fecaca; }
+  .stb { display:inline-flex; align-items:center; padding:1px 8px; border-radius:var(--r-pill); font-size:var(--fs-xs); font-weight:700; background:#334155; white-space:nowrap; }
+  .stb.sm { font-size:var(--fs-2xs); padding:0 6px; }
+  .st-on { background:#166534; color:#dcfce7; } .st-live { background:#9a3412; color:#ffedd5; } .st-done { background:#1e3a8a; color:#dbeafe; } .st-off { background:#3f3f46; color:#d4d4d8; }
+  .half { background:#4c1d95; color:#ede9fe; border-radius:4px; padding:0 5px; font-size:var(--fs-2xs); font-weight:700; }
+  .brow { display:flex; flex-direction:column; gap:5px; padding:8px 0; border-top:1px solid var(--divider); }
+  .brow-h { display:flex; align-items:center; gap:6px; font-size:var(--fs-sm); white-space:nowrap; min-width:0; }
+  .brow-h .bt { font-weight:700; } .brow-h .ln { color:var(--warn); font-weight:700; } .brow-h .no { color:var(--faint); font-size:var(--fs-2xs); }
+  .brow-h .res { margin-left:auto; font-size:var(--fs-xs); color:#93c5fd; overflow:hidden; text-overflow:ellipsis; }
+  .ocs { display:flex; gap:6px; }
+  .oc2 { flex:1 1 0; min-width:0; min-height:var(--tap); background:var(--inset); border:1px solid var(--border); border-radius:var(--r-sm); padding:5px 7px;
+    text-align:left; color:inherit; font:inherit; display:block; }
+  .oc2 .l1 { display:flex; justify-content:space-between; align-items:baseline; gap:4px; font-size:12px; }
+  .oc2 .lab { color:var(--muted); font-size:var(--fs-xs); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .oc2 .od { font-weight:800; font-size:15px; color:var(--text); }
+  .oc2 .l2 { font-size:var(--fs-2xs); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .oc2.win { background:var(--good-bg); border-color:#16a34a; }
+  .oc2.upset { border-color:var(--hot); box-shadow:0 0 0 1px var(--hot); } .oc2.value { border-color:#22d3ee; box-shadow:0 0 0 1px #22d3ee; }
+  /* 1순위 (main pick, class main/mainb): square yellow outline + label — distinct from 🔥 역배 (orange border) / 💎 (cyan) */
+  .oc2.main, .oc2.likely { position:relative; border-radius:2px; outline:3px solid #facc15; outline-offset:1px; }
+  .oc2.main-s { background-image:linear-gradient(rgba(250,204,21,.10), rgba(250,204,21,.10)); }
+  /* ★유력 (teal, any odds) vs 1순위 (yellow); same cell → teal outline + yellow inner ring + both badges */
+  .oc2.likely { outline-color:#2dd4bf; background-image:linear-gradient(rgba(45,212,191,.10), rgba(45,212,191,.10)); }
+  .oc2.main.likely { outline-color:#2dd4bf; box-shadow:inset 0 0 0 2px #facc15; }
+  .oc2 .markb { position:absolute; top:-8px; right:3px; display:flex; gap:2px; max-width:calc(100% - 6px); overflow:hidden; pointer-events:none; }
+  .oc2 .markb > span { font-size:10px; line-height:13px; padding:0 4px; border-radius:2px; font-weight:800; white-space:nowrap; }
+  .oc2 .mainb { background:#facc15; color:#111; } .oc2 .likelyb { background:#2dd4bf; color:#042f2e; }
+  .oc2 .psyb { background:#c084fc; color:#1e0b36; } .oc2.psy { outline:2px dashed #c084fc; outline-offset:1px; }
+  .psy-box { margin-top:4px; padding:5px 7px; border-radius:8px; background:rgba(192,132,252,.07); border:1px solid rgba(192,132,252,.25); font-size:var(--fs-xs); line-height:1.5; }
+  .psy-box .psl { overflow-wrap:anywhere; } .psy-box .psv { font-size:10.5px; padding:0 5px; border-radius:7px; white-space:nowrap; }
+  .psv.ps-ok { background:#10331f; color:#4ade80; } .psv.ps-bad { background:#3a1414; color:#fca5a5; } .psv.ps-few { border:1px solid var(--muted); color:var(--muted); }
+  .psy-box .psp { margin-top:2px; font-weight:600; } .psy-box .psp.none { font-weight:400; color:var(--muted); }
+  .val-line { margin-top:3px; font-size:11px; color:var(--muted); line-height:1.4; } .val-line:not(.none) { color:#fde047; font-weight:600; } .val-line .val-rec { color:#a3e635; font-weight:700; } .val-line small { font-weight:500; opacity:.85; }
+  .unvt { font-size:9px; font-weight:500; opacity:.75; margin-left:3px; } .oc2 .mainb.val { background:#fef08a; }
+  .ocs.n3 .oc2 .markb > span { padding:0 3px; letter-spacing:-.3px; }
+  .ocs.n3 .oc2.main.likely .markb { right:1px; max-width:calc(100% - 2px); } .ocs.n3 .oc2.main.likely .markb > span { font-size:9px; padding:0 2px; }
+  .mainlg i { display:inline-block; width:10px; height:10px; outline:3px solid #facc15; margin:0 4px 0 2px; vertical-align:-1px; }
+  .mainlg i.lk { outline-color:#2dd4bf; }
+  /* 2순위 (sky blue dashed) next to 1순위 (yellow) — composite analysis picks (app/edge.analyse_jr) */
+  .oc2.jsub { position:relative; border-radius:2px; outline:2px dashed #7dd3fc; outline-offset:1px; background-image:linear-gradient(rgba(125,211,252,.08), rgba(125,211,252,.08)); }
+  .oc2.likely.jsub { outline:3px solid #2dd4bf; box-shadow:inset 0 0 0 2px #7dd3fc; }
+  .oc2 .subb { background:#7dd3fc; color:#082f49; }
+  .mainlg i.sb { outline:2px dashed #7dd3fc; }
+  .jr-box { margin-top:4px; padding:5px 7px; border-radius:8px; background:rgba(250,204,21,.06); border:1px solid rgba(250,204,21,.28); font-size:var(--fs-xs); line-height:1.45; min-width:0; }
+  .jr-box .jl { display:flex; gap:5px; align-items:baseline; min-width:0; flex-wrap:wrap; }
+  .jr-box .jk { flex:0 0 auto; font-weight:800; font-size:11px; padding:0 5px; border-radius:3px; }
+  .jr-box .jk.m { background:#facc15; color:#111; } .jr-box .jk.s { background:#7dd3fc; color:#082f49; }
+  .jr-box .jc { font-weight:700; overflow-wrap:anywhere; min-width:0; } .jr-box .jo { font-weight:800; color:var(--text); white-space:nowrap; }
+  .jr-box .jw { flex:1 1 100%; font-size:10.5px; color:var(--muted); overflow-wrap:anywhere; padding-left:2px; }
+  .jr-box .jrec { margin-top:2px; font-size:10.5px; color:var(--muted); overflow-wrap:anywhere; border-top:1px dashed var(--divider); padding-top:2px; }
+  .jr-box .jrec b { color:var(--text); } .jr-box .jrec .ear { color:var(--warn); font-weight:700; }
+  .srcl.src-wait { color:var(--warn); background:var(--warn-bg); border:1px dashed #8a6414; }
+  /* odds value + change never break mid-number; the change drops under the odds as a unit when the tile is narrow */
+  .oc2 .ov { display:inline-flex; flex-wrap:wrap; justify-content:flex-end; align-items:baseline; column-gap:2px; min-width:0; }
+  .oc2 .ov > * { white-space:nowrap; } .oc2 .ov .mv { font-size:10px; letter-spacing:-.2px; }
+  .oc2 .l1 .lab { flex:0 1 auto; min-width:0; }
+  /* 3-tile rows: label on its own line (핸디승/핸디무/핸디패 readable), odds + change below */
+  .ocs.n3 .oc2 { padding:5px 6px; }
+  .ocs.n3 .oc2 .l1 { flex-direction:column; align-items:flex-start; gap:0; }
+  .ocs.n3 .oc2 .lab { max-width:100%; } .ocs.n3 .oc2 .ov { justify-content:flex-start; }
+  .oc2.na { opacity:.35; } .oc2.est { border-style:dashed; } .oc2 .na2 { font-size:var(--fs-2xs); color:var(--muted); font-weight:400; }
+  .ocrow { display:flex; gap:6px; margin:6px 0; }
+  .ocrow .oc2 { display:flex; flex-direction:column; gap:2px; font-size:12px; } .ocrow .oc2 span { font-size:var(--fs-xs); }
+  .oc2.best { background:var(--good-bg); border-color:#16a34a; }
+  .mc .tag, .evl .tag { display:inline-block; font-size:var(--fs-2xs); padding:0 6px; margin-left:3px; border-radius:var(--r-xs); background:var(--surface-3); color:#cbd5e1; width:auto; }
+  .tag.okt { background:#14532d !important; color:#bbf7d0 !important; }
+  .evl { padding-left:16px; font-size:var(--fs-sm); } .evl li { margin:4px 0; overflow-wrap:anywhere; } .evl a { color:#93c5fd; }
+  .mv.up { color:#f87171; font-size:var(--fs-2xs); } .mv.down { color:#60a5fa; font-size:var(--fs-2xs); }
+  .fl { font-size:var(--fs-xs); font-weight:700; } .fl.upset { color:var(--hot); } .fl.value { color:#22d3ee; }
+  .kv { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; margin:10px 0; }
+  .kv > div { background:var(--inset); border:1px solid var(--border); border-radius:var(--r); padding:10px; }
+  .kv b { display:block; font-size:var(--fs-xl); font-weight:800; letter-spacing:-.3px; } .kv span { font-size:var(--fs-xs); color:var(--muted); }
+  .kv span.reftag, .refbox .reftag { display:inline-block; background:#334155; color:#e2e8f0; font-size:10px; font-weight:700; padding:1px 6px; border-radius:8px; margin:0 4px 2px 0; vertical-align:1px; }
+  .tw { overflow-x:auto; } table.mt { border-collapse:collapse; width:100%; font-size:var(--fs-sm); }
+  table.mt th, table.mt td { padding:6px; border-top:1px solid var(--border); text-align:right; white-space:nowrap; }
+  table.mt th { color:var(--muted); font-weight:600; } table.mt th:first-child, table.mt td:first-child { text-align:left; }
+  .ucard .pk { font-size:var(--fs); font-weight:700; color:#fdba74; } .ucard.watch .pk { color:#c7d2fe; }
+  .ucard .nums { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; margin:4px 0; }
+  .ucard ul, .mc ul { margin:4px 0 0; padding-left:16px; font-size:var(--fs-xs); color:var(--text-2); }
+  .pmeta h2 { margin:0; font-size:var(--fs-lg); } .pmeta h2 b { color:var(--warn); }
+  .prow { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+  #protoView label { display:inline-flex; align-items:center; gap:6px; width:auto; margin:0 8px 0 0; font-size:12.5px; }
+  #protoView input[type=checkbox] { width:auto; margin:0; min-height:0; }
+  .prow select { width:auto !important; min-height:var(--tap); }
+  .pmeta .muted { margin:4px 0; font-size:var(--fs-sm); }
+  .chips { margin:6px 0; display:flex; gap:6px; flex-wrap:wrap; }
+  details.pan { margin-top:6px; } details.pan summary { font-size:var(--fs-sm); }
+  table.an-t { width:100%; table-layout:fixed; border-collapse:collapse; margin-top:6px; font-size:var(--fs-xs); }
+  table.an-t th { text-align:left; color:var(--muted); font-weight:600; padding:3px 4px; border-bottom:1px solid var(--border); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  table.an-t td { padding:3px 4px; border-top:1px solid var(--divider); vertical-align:top; overflow-wrap:anywhere; word-break:keep-all; }
+  table.an-t th:not(:first-child), table.an-t td:not(:first-child) { width:17%; text-align:right; white-space:nowrap; }
+  table.an-t tr.det td { border-top:none; color:var(--muted); font-size:var(--fs-2xs); padding-top:0; text-align:left; white-space:normal; width:auto; }
+  table.an-t tr.fin td { color:var(--warn); font-weight:700; }
+  .an-bet { border-top:1px solid var(--divider); padding:3px 0; font-size:var(--fs-xs); overflow-wrap:anywhere; } .oc-i { white-space:nowrap; }
+  .an-sec { font-size:var(--fs-xs); margin-top:6px; color:var(--text-2); overflow-wrap:anywhere; } .an-sec ul { margin:2px 0 0 16px; padding:0; }
+  .appm { margin-top:5px; font-size:var(--fs-xs); color:#a5b4fc; }
+  /* proto live score / sections / toast */
+  .live:not(.card) { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:4px 0 2px; font-size:var(--fs-sm); }
+  .live:not(.card) .sc { font-size:18px; font-weight:800; letter-spacing:1px; }
+  .live:not(.card).in .dot { color:#f87171; font-weight:800; animation:blink 1.4s infinite; } .live:not(.card).post .sc { color:#93c5fd; }
+  .live:not(.card) .det { color:var(--warn); font-weight:600; } .live:not(.card) .src { color:var(--muted); font-size:var(--fs-2xs); }
+  .live:not(.card).none { color:var(--muted); font-size:var(--fs-xs); }
+  @keyframes blink { 50% { opacity:.3; } }
+  .psec { margin:18px 0 8px; font-size:var(--fs-md); font-weight:800; display:flex; align-items:baseline; gap:8px; }
+  .psec .n { color:var(--muted); font-size:12px; font-weight:500; }
+  .slot { position:sticky; top:var(--stick-h); z-index:2; background:color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter:blur(6px);
+    padding:8px 2px; margin:10px 0 8px; font-size:var(--fs-md); font-weight:800; color:#86efac; border-bottom:1px solid var(--divider); }
+  details.donesec > summary { font-size:var(--fs); font-weight:700; margin:14px 0 8px; color:var(--text-2); }
+  .toast { position:fixed; left:50%; bottom:calc(18px + var(--tabbar-h)); transform:translateX(-50%); max-width:calc(100vw - 24px); background:#1f3b8f; color:#fff;
+    padding:11px 16px; border-radius:var(--r-lg); font-size:14px; font-weight:700; box-shadow:var(--shadow-2); z-index:70; transition:opacity .3s, transform .3s; }
+  .toast.hide { opacity:0; pointer-events:none; transform:translate(-50%, 8px); }
+  .ios-hint { position:fixed; left:12px; right:12px; bottom:calc(12px + var(--tabbar-h)); z-index:60; background:#1b2540; border:1px solid var(--accent); color:var(--text);
+    border-radius:var(--r-lg); padding:12px 44px 12px 14px; font-size:13.5px; line-height:1.55; box-shadow:var(--shadow-2); }
+  .ios-hint b { color:#fff; } .ios-hint .shr { display:inline-block; padding:0 5px; border:1px solid #6b7fd6; border-radius:5px; font-size:12px; }
+  .ios-hint button { position:absolute; top:2px; right:2px; width:var(--tap); height:var(--tap); background:none; border:0; color:var(--muted); font-size:22px; cursor:pointer; }
+  body { padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
+  /* 오답 분석 / 학습 */
+  .risk { color:var(--warn); font-size:var(--fs-xs); font-weight:700; margin:4px 0; overflow-wrap:anywhere; }
+  span.risk { display:inline; margin:0; }
+  .cz { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+  .cz .c { background:var(--inset); border:1px solid var(--border); border-radius:var(--r-sm); padding:6px 8px; font-size:12px; min-width:0; }
+  .cz .c .h { display:flex; justify-content:space-between; gap:6px; font-weight:700; }
+  .cz .c .e { color:var(--text-2); font-size:var(--fs-xs); overflow-wrap:anywhere; margin-top:2px; }
+  .confbar { height:4px; background:var(--divider); border-radius:2px; margin-top:4px; } .confbar i { display:block; height:100%; background:var(--hot); border-radius:2px; }
+  .hb { display:grid; grid-template-columns:minmax(0, 1fr) 42px; gap:2px 8px; align-items:center; font-size:12px; margin:3px 0; }
+  .hb .bar2 { height:7px; background:var(--divider); border-radius:4px; grid-column:1 / -1; } .hb .bar2 i { display:block; height:100%; border-radius:4px; background:#60a5fa; }
+  .hb .lb { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .hb .nv { text-align:right; color:var(--muted); }
+  .nd { font-size:var(--fs-xs); color:var(--muted); margin-top:4px; overflow-wrap:anywhere; }
+  .calchart { width:100%; max-width:340px; display:block; margin:6px auto 0; }
+  .lgd { display:flex; gap:10px; justify-content:center; font-size:var(--fs-xs); color:var(--muted); flex-wrap:wrap; }
+  .lgd b { display:inline-block; width:10px; height:10px; border-radius:5px; margin-right:3px; vertical-align:-1px; }
+  .mrow { display:grid; grid-template-columns:1fr auto auto; gap:2px 10px; font-size:12px; padding:4px 0; border-top:1px solid var(--divider); }
+  .mrow span:not(:first-child) { text-align:right; white-space:nowrap; }
+  .clog { font-size:var(--fs-xs); border-top:1px solid var(--divider); padding:6px 0; overflow-wrap:anywhere; } .clog .k { font-weight:700; }
+
+  /* ================= skeleton loaders ================= */
+  .skel { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:14px; }
+  .skel i { display:block; height:12px; border-radius:6px; margin:8px 0; background:linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+    background-size:200% 100%; animation:shimmer 1.2s linear infinite; }
+  .skel i.t { height:18px; width:62%; } .skel i.s { width:38%; } .skel i.b { height:26px; }
+  @keyframes shimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel i { animation:none; } }
+
+  /* ================= notification sheet ================= */
+  .scrim { position:fixed; inset:0; background:#0009; z-index:80; opacity:0; transition:opacity .2s; }
+  .scrim.show { opacity:1; }
+  .sheet { position:fixed; top:0; right:0; bottom:0; width:min(420px, 100vw); z-index:81; background:var(--bg-2); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; transform:translateX(100%); transition:transform .25s var(--ease); padding-top:env(safe-area-inset-top);
+    box-shadow:var(--shadow-2); }
+  .sheet.show { transform:none; }
+  .sheet-h { display:flex; align-items:center; gap:8px; padding:6px 8px 6px 16px; border-bottom:1px solid var(--divider); }
+  .sheet-h h2 { margin:0; flex:1; font-size:var(--fs-lg); }
+  .seg { display:grid; grid-template-columns:1fr 1fr; gap:4px; margin:10px 16px 0; padding:4px; background:var(--surface); border-radius:var(--r); border:1px solid var(--border); }
+  .seg button { min-height:40px; border:0; border-radius:9px; background:none; color:var(--muted); font-weight:700; font-size:var(--fs); cursor:pointer; }
+  .seg button.active { background:var(--surface-3); color:var(--text); }
+  .sheet-b { flex:1; overflow-y:auto; padding:12px 16px calc(24px + env(safe-area-inset-bottom)); overscroll-behavior:contain; }
+  .nitem { display:flex; gap:10px; width:100%; text-align:left; font:inherit; color:inherit; background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+    padding:10px 12px; margin-bottom:8px; cursor:pointer; min-height:var(--tap); }
+  .nitem.unread { border-color:#3a5bbf; background:#15203a; }
+  .nitem .ic { font-size:18px; line-height:1.3; }
+  .nitem .tx { min-width:0; flex:1; } .nitem .tt { display:block; font-weight:700; font-size:var(--fs-sm); } .nitem .bd { display:block; font-size:var(--fs-xs); color:var(--text-2); margin-top:2px; overflow-wrap:anywhere; }
+  .nitem .tm { display:block; font-size:var(--fs-2xs); color:var(--faint); margin-top:3px; }
+  .setrow { display:flex; align-items:center; gap:12px; min-height:52px; padding:6px 0; border-top:1px solid var(--divider); }
+  .setrow .lbl { flex:1; min-width:0; } .setrow .lbl b { display:block; font-size:var(--fs); font-weight:600; } .setrow .lbl span { font-size:var(--fs-xs); color:var(--muted); }
+  .setrow select { width:auto; min-height:var(--tap); }
+  .sw { position:relative; width:52px; height:32px; flex:0 0 auto; }
+  .sw input { position:absolute; inset:0; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; z-index:1; min-height:0; }
+  .sw span { position:absolute; inset:0; border-radius:16px; background:var(--surface-3); border:1px solid var(--border-2); transition:background .15s; }
+  .sw span::after { content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#cbd5e1; transition:transform .15s var(--ease); }
+  .sw input:checked + span { background:var(--accent); border-color:var(--accent); } .sw input:checked + span::after { transform:translateX(20px); background:#fff; }
+  .sw input:focus-visible + span { outline:2px solid var(--accent-2); outline-offset:2px; }
+  .nstate { padding:12px; border-radius:var(--r); background:var(--surface); border:1px solid var(--border); font-size:var(--fs-sm); line-height:1.6; margin-bottom:10px; }
+  .nstate.ok { border-color:#166534; background:#0f2a1c; } .nstate.warn { border-color:#6b5212; background:var(--warn-bg); color:#fde3a0; }
+
+  @media (max-width: 640px) {
+    header.appbar { padding:4px 8px 0 12px; } h1 { font-size:16px; }
+    nav#tabs { padding:2px 12px 8px; } nav#tabs button { padding:0 12px; font-size:13.5px; }
+    .toolbar, .filters { padding-left:12px; padding-right:12px; }
+    details.disclaimer, .offline-bar { margin-left:12px; margin-right:12px; }
+    main { padding:6px 12px 24px; gap:12px; }
+    .xview { padding:10px 12px 24px !important; }
+    .card, .mc { padding:12px; border-radius:var(--r); }
+    .brand img { display:none; }
+  }
+  /* ================= features: notify settings ================= */
+  .row-btns { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 8px; }
+  .row-btns .btn { flex:1 1 auto; }
+  .set-h { margin:18px 0 4px; font-size:var(--fs-sm); color:var(--muted); font-weight:700; letter-spacing:.02em; }
+  .fresh { cursor:pointer; position:relative; }
+  .cllog { margin:8px 0 10px; border:1px solid var(--border); border-radius:var(--r); background:var(--surface); padding:0 12px; }
+  .cllog > summary { min-height:var(--tap); display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; list-style:none; }
+  .cllog > summary::-webkit-details-marker { display:none; }
+  .cllog .cl-badge { font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:8px; background:#1e3a5f; color:#93c5fd; }
+  .cllog .cl-body { padding:0 0 10px; font-size:var(--fs-sm); line-height:1.55; color:var(--text); }
+  .cllog .cl-date { color:var(--muted); font-size:var(--fs-xs); margin:0 0 4px; }
+  .cllog ul { margin:4px 0 0; padding-left:1.15em; } .cllog li { margin:3px 0; }
+  .fresh::after { content:""; position:absolute; left:-4px; right:-4px; top:-10px; bottom:-10px; }   /* 44 px hit area */
+  .psum { display:flex; flex-wrap:wrap; gap:6px 14px; margin:10px 0 4px; font-size:var(--fs-sm); color:var(--text-2); }
+  .psum b { color:var(--text); font-weight:800; }
+  details.pmore { margin-top:6px; border-top:1px solid var(--divider); }
+  /* 🎲 몬테카를로 예측픽 · 🚨 긴급 레이더 */
+  .mcrow { margin-top:8px; padding:7px 9px; border-radius:var(--r-sm); background:var(--inset); border:1px solid var(--border); font-size:var(--fs-sm); min-width:0; overflow-wrap:anywhere; }
+  .mcrow.pick { border-color:#1f6f4f; background:#0e2419; }
+  .mcrow.live { border-color:#5b3a3a; }
+  .mcl1 { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+  .mcb { display:inline-flex; align-items:center; padding:1px 8px; border-radius:var(--r-pill); font-size:var(--fs-2xs); font-weight:700; background:var(--accent-bg); color:var(--accent-2); border:1px solid #2c3f73; white-space:nowrap; }
+  .mcpk { color:var(--good); font-weight:700; } .mcpk b { color:#eafff5; }
+  .mchd { color:var(--warn); font-weight:700; } .mclv { color:var(--bad); font-weight:700; }
+  .mcrs { margin-top:3px; }
+  .warn { color:var(--warn); }
+  .mcd > summary { font-size:var(--fs-xs); }
+  table.an-t.mct th:not(:first-child), table.an-t.mct td:not(:first-child) { width:26%; }
+  .mcul { margin:4px 0 4px 18px; padding:0; font-size:var(--fs-xs); color:var(--text-2); }
+  .rd.rd-on { border-color:var(--bad); background:linear-gradient(180deg, var(--bad-bg), var(--surface) 60%); }
+  .rd.rd-ok { border-color:#1f6f4f; }
+  .rd-find { margin-top:8px; padding:8px; border-radius:var(--r-sm); background:var(--inset); border:1px solid var(--border); font-size:var(--fs-sm); overflow-wrap:anywhere; }
+  .rd-steps, .rd-plan { margin:6px 0 6px 18px; padding:0; font-size:var(--fs-xs); line-height:1.6; overflow-wrap:anywhere; }
+  .demo { margin:6px 0; }
+  .rdbar { margin:8px 16px 0; }
+  .rdbar-btn { width:100%; min-height:var(--tap); text-align:left; padding:8px 12px; border-radius:var(--r); border:1px solid var(--bad); background:var(--bad-bg); color:#ffd9d9; font-size:var(--fs-sm); cursor:pointer; animation:rdpulse 2s ease-in-out infinite; overflow-wrap:anywhere; }
+  @keyframes rdpulse { 0%,100% { box-shadow:0 0 0 0 #f8717100; } 50% { box-shadow:0 0 0 4px #f8717133; } }
+  @media (prefers-reduced-motion: reduce) { .rdbar-btn { animation:none; } }
+  .selg { margin:10px 0 4px; font-weight:700; color:var(--text-2); }
+  .selrow { padding:8px 0; border-top:1px solid var(--divider); overflow-wrap:anywhere; }
+  .selrow.pooled { background:var(--inset); border-radius:var(--r-sm); padding:8px; border:1px solid var(--border); }
+  .selh { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px; margin-bottom:2px; }
+  .selh .stb { white-space:normal; }
+  details.pmore > summary { min-height:var(--tap); display:flex; align-items:center; cursor:pointer; color:var(--muted); font-size:var(--fs-sm); font-weight:600; }
+  details.pmore > div, details.pmore > .chips { margin:6px 0; }
+  .freshpop { position:fixed; top:calc(var(--stick-h, 100px) + 6px); right:10px; left:10px; max-width:420px; margin-left:auto; z-index:60;
+    background:var(--bg-2); border:1px solid var(--border-2); border-radius:var(--r-lg); padding:12px 14px; box-shadow:0 12px 32px #0008; font-size:var(--fs-sm); }
+  .fp-r { display:flex; gap:8px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--divider); }
+  .fp-r:first-of-type { margin-top:8px; }
+  .fp-d { width:9px; height:9px; border-radius:50%; background:var(--faint); margin-top:5px; flex:0 0 auto; }
+  .fp-r.ok .fp-d { background:var(--good); } .fp-r.warn .fp-d { background:var(--warn); } .fp-r.stale .fp-d { background:var(--bad); }
+  .fp-l { flex:0 0 78px; font-weight:700; } .fp-v { flex:1; min-width:0; }
+</style>
+</head>
+<body>
+<div class="stick" id="stick">
+<header class="appbar">
+  <div class="brand"><img src="static/icons/icon-192.png" alt="" width="28" height="28"><h1>승부 예측</h1></div>
+  <span class="fresh" id="fresh" role="button" tabindex="0" aria-live="polite" title="데이터 기준 시각 (눌러서 자세히)"><i></i><span id="updated">불러오는 중…</span></span>
+  <span class="muted" id="countdown"></span>
+  <button id="installBtn" class="install-btn" type="button" hidden>📲 앱 설치</button>
+  <button id="bellBtn" class="icon-btn" type="button" aria-label="알림 센터 열기" aria-haspopup="dialog">🔔<span class="badge" id="bellBadge" hidden>0</span></button>
+</header>
+<nav id="tabs" aria-label="탭">
+  <button data-sport="soccer" class="active">⚽ 축구</button>
+  <button data-sport="baseball">⚾ 야구</button>
+  <button data-sport="basketball">🏀 농구</button>
+  <button data-sport="hockey">🏒 아이스하키</button>
+  <button data-sport="volleyball">🏐 배구</button>
+  <button data-sport="proto">🎫 프로토 승부식</button>
+  <button data-sport="upsets">🔥 역배 예상</button>
+  <button data-sport="picks">🎯 AI 픽</button>
+  <button data-sport="perf">📊 예측 성적</button>
+  <button data-sport="backtest">📈 백테스트</button>
+  <button data-sport="miss">🧠 오답 분석</button>
+</nav>
+</div>
+<div id="offlineBar" class="offline-bar" role="status" hidden></div>
+<div id="radarBar" class="rdbar" role="alert" hidden></div>
+<div id="iosHint" class="ios-hint" role="dialog" aria-label="홈 화면에 추가 안내" hidden>
+  📲 <b>앱으로 설치하기</b><br><span id="iosHintText">Safari 아래(또는 위)의 <span class="shr">공유 ⬆︎</span> 버튼을 누른 뒤 <b>‘홈 화면에 추가’</b>를 선택하세요.</span>
+  <button id="iosHintClose" type="button" aria-label="닫기">×</button>
+</div>
+<details class="cllog" id="changelogBox"><summary>📋 주간 개선 내역 <span class="cl-badge" id="clBadge">불러오는 중</span></summary><div class="cl-body" id="clBody"><div class="muted">불러오는 중…</div></div></details>
+<details class="disclaimer"><summary>⚠️ 통계적 추정치 · 베팅 권유 아님</summary><div>이 페이지의 확률은 경기 상황, 시즌 성적, 과거 경기로 학습한 모델, 배당(시장), 공개 데이터(투수·부상·날씨·이동 등 제공되는 항목)와 뉴스 헤드라인을 조합한 <b>통계적 추정치</b>입니다. 반영된 항목과 빠진 항목은 각 경기의 분석 상세에 표시됩니다. '역배'·추천·AI 픽은 분석 참고용이며 <b>베팅 권유가 아니고</b> 실제 결과를 보장하지 않습니다.</div></details>
+<section id="bestVal" class="bv" aria-label="검증된 최고 픽" hidden></section>
+<section id="bestUpset" class="bu" aria-label="오늘의 베스트 역배"></section>
+<div class="toolbar" id="toolbar"><div class="search"><input id="q" type="search" inputmode="search" enterkeyhint="search" placeholder="팀·리그 검색 (예: 두산, MLB)" aria-label="팀 또는 리그 검색" autocomplete="off"><button type="button" id="qClear" aria-label="검색어 지우기" hidden>×</button></div></div>
+<div class="filters" id="filters"></div>
+<section id="protoView" class="xview" style="display:none"></section>
+<section id="upsetView" class="xview" style="display:none"></section>
+<section id="perfView" class="xview" style="display:none"></section>
+<section id="picksView" class="xview" style="display:none"></section>
+<section id="btView" class="xview" style="display:none"></section>
+<section id="missView" class="xview" style="display:none"></section>
+<main>
+  <section id="games"></section>
+  <aside>
+    <div class="card" id="whatif"></div>
+    <div class="card"><h3>📐 모델 설명</h3><div class="explain" id="explain"></div></div>
+    <div class="card"><h3>💱 배당·역배 분석 방법</h3><div class="explain">
+      배당 출처: ESPN 스코어보드의 DraftKings 머니라인(시가·마감·라이브). 30초마다 로컬 SQLite에 스냅샷을 저장해 자체 배당 흐름을 만듭니다.
+      내재확률 = 배당 역수를 합이 1이 되도록 정규화(마진 제거).<br>
+      <b>최종 확률</b>: 경기 전 = 모델 30% + 시장 70%. 경기 중 = 시장이 반영한 경기 전 전력에 맞춰 모델의 팀 전력을 보정한 뒤 라이브 모델 계산,
+      라이브 배당이 있으면(축구) 추가로 50% 혼합.<br>
+      <b>역배 가능성</b>: 시장 기준 약팀에 대해 (모델 확률 − 시장 내재확률)이 +5%p 이상이고 기대값(모델확률×배당−1)이 양수면 '높음', +2.5%p 이상이면 '관심'.
+      모든 수치는 통계적 추정이며 베팅 권유가 아닙니다. KBO·K리그는 네이버가 배당을 제공하지 않아 미표시.</div></div>
+    <div class="card"><h3>🔌 데이터 소스 상태</h3><div class="src" id="sources"></div></div>
+  </aside>
+</main>
+<nav class="tabbar" id="tabbar" aria-label="주요 메뉴">
+  <button type="button" data-go="soccer" class="active"><span class="ic">🏠</span>홈</button>
+  <button type="button" data-go="proto"><span class="ic">🎫</span>프로토</button>
+  <button type="button" data-go="upsets"><span class="ic">🔥</span>역배</button>
+  <button type="button" data-go="perf"><span class="ic">📊</span>예측성적</button>
+</nav>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="sheet" id="notifySheet" role="dialog" aria-modal="true" aria-labelledby="notifyTitle" hidden>
+  <div class="sheet-h"><h2 id="notifyTitle">🔔 알림</h2><button type="button" class="icon-btn" id="notifyClose" aria-label="닫기">✕</button></div>
+  <div class="seg" role="tablist"><button type="button" role="tab" data-pane="list" class="active" id="nTabList">알림 목록</button><button type="button" role="tab" data-pane="settings" id="nTabSet">설정</button></div>
+  <div class="sheet-b" id="notifyBody"></div>
+</aside>
+<script>
+const REFRESH = 30;
+let sport = 'soccer', data = null, leagueFilter = 'all', countdown = REFRESH;
+const pct = x => (x == null ? '-' : (x * 100).toFixed(x > 0.995 || x < 0.005 ? 1 : 0) + '%');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const EXPLAIN = {
+  soccer: `<b>포아송 모델</b>: 남은 시간 동안 두 팀의 득점을 독립적인 포아송 분포로 가정합니다.<br>
+   λ(홈) = 리그평균득점 × 홈 공격력 × 원정 수비력 × 1.12, λ(원정) = … × 0.89 (공격/수비력은 순위표 득·실점을 10경기 분량의 리그 평균으로 보정).<br>
+   남은 비율 = 남은 분 ÷ 96 (추가시간 포함), 최종 점수 분포를 합산해 <b>홈승/무/원정승</b> 확률을 구합니다.<br>
+   <b>퇴장(레드카드)</b>: 경기 중 퇴장 1명당 해당 팀 남은 시간 득점률 ×0.67, 상대 팀 ×1.25 (근사치).`,
+  baseball: `<b>마르코프 체인 + 동적계획법</b>: 아웃(0~2)×주자(8가지) 24개 상태에서 타석 결과(볼넷·안타·2루타·3루타·홈런·아웃)의 확률로 이닝당 득점 분포를 정확히 계산합니다.<br>
+   팀별 득점력은 시즌 득점/실점(순위표)으로 보정하며, 홈팀은 +4%, 원정 −4% 득점 보정.<br>
+   <b>투수 반영</b>: 선발투수 시즌 ERA ÷ 리그 ERA (40이닝 분량 리그 평균으로 축소 보정)를 1~5회와 6회 절반(약 5.5이닝)에 적용하고 이후는 팀 실점률(불펜 대용). 경기 중에는 현재 마운드의 투수(구원이면 해당 이닝만)를 반영합니다. 남은 이닝을 모두 전개해(9회말 끝내기, MLB 승부치기 주자 규칙, KBO 11회 무승부 포함) 승리 확률을 구합니다.`,
+  basketball: `<b>정규분포(브라운 운동) 모델</b>: 최종 점수차 ~ N(현재 점수차 + 사전우위×r, σ²×r), r = 남은 시간 비율.<br>
+   P(홈 승) = Φ((점수차 + μ·r) / (σ·√r)). σ = NBA 13점 / WNBA 11.5점, 사전우위 μ = 홈 어드밴티지(NBA 2.5점) + (홈 득실마진 − 원정 득실마진)(10경기 분량 축소 보정).`,
+  hockey: `<b>포아송 득점 모델 (NHL)</b>: 팀별 공격·수비력은 2023-24~현재 NHL 경기(ESPN)로 시간가중 포아송 회귀(능선 보정) → λ(홈), λ(원정).<br>
+   정규 60분 득점 분포에 점수차 효과(동점·1골차일 때 득점 패턴) 가중을 학습해 적용하고, 동점이면 <b>연장 5분(서든데스, 득점률 ×OT 배수)</b> → <b>승부샷</b>(플레이오프는 연장 무제한).<br>
+   경기 중에는 남은 시간 비율만큼 득점 분포를 다시 계산합니다. 경기 전 최종 확률 = 모델 30% + DraftKings 배당 70%. 퍽라인·총점도 같은 분포에서 계산합니다.<br>
+   <b>프로토</b>: 승무패(무 있음)·핸디캡·언더오버 = 정규 60분, 승패(무 없음) = 연장·승부샷 포함 (프로토 규정 7항 일반 원칙에서 추정).`,
+  volleyball: `<b>랠리 포인트 마르코프 모델 (V리그)</b>: 한 랠리를 홈팀이 딸 확률 q로 25점(5세트 15점)·듀스 규칙을 정확히 전개해 세트·경기 승률, 세트스코어(3-0~0-3), 총점 분포를 계산합니다.<br>
+   q는 2022-23~2025-26 V리그 결과(네이버 스포츠, 세트별 점수)로 학습한 팀별 랠리 능력치(시간가중·능선 보정) + 홈 이점. 경기 중에는 현재 세트 스코어와 세트 내 점수에서 다시 계산합니다.<br>
+   네이버는 배당을 제공하지 않아 시장 혼합 없이 순수 모델입니다. 프로토 배구는 최종 결과(규정 예외), 핸디캡은 세트(±1.5/±2.5), 언더오버는 총 득점입니다.`,
+};
+
+function probBar(g, p, small) {
+  if (!p) return '';
+  const a = p.away || 0, h = p.home || 0, d = p.draw ?? p.tie ?? 0;
+  const dl = g.sport === 'soccer' ? '무' : '무승부';
+  return `<div class="bar ${small ? 'small' : ''}">
+    <div class="a" style="width:${a*100}%">${a > .09 ? pct(a) : ''}</div>
+    ${d > 0.0005 ? `<div class="d" style="width:${d*100}%">${d > .09 ? dl + ' ' + pct(d) : ''}</div>` : ''}
+    <div class="h" style="width:${h*100}%">${h > .09 ? pct(h) : ''}</div></div>
+    ${small ? '' : `<div class="legend"><span style="color:var(--away)">원정 ${esc(g.away.short)} ${pct(a)}</span>${d > 0.0005 ? `<span class="muted">${dl} ${pct(d)}</span>` : ''}<span style="color:var(--home)">홈 ${esc(g.home.short)} ${pct(h)}</span></div>`}`;
+}
+
+// ESPN serves 500×500 PNGs (~40–70 KB each); its image combiner returns a 64 px copy (~4–7 KB) — enough for a 24 px logo at DPR 2.
+function logoUrl(u) {
+  const m = /^https:\/\/a\.espncdn\.com(\/i\/teamlogos\/[^?]+\.png)$/.exec(u || '');
+  return m ? `https://a.espncdn.com/combiner/i?img=${m[1]}&w=64&h=64` : u;
+}
+function teamRow(g, side) {
+  const t = g[side], o = g[side === 'home' ? 'away' : 'home'];
+  const showScore = g.state !== 'pre' && g.state !== 'cancel';
+  const win = g.state === 'post' && t.score > o.score;
+  return `<div class="team ${win ? 'win' : ''}"><span class="tag">${side === 'home' ? '홈' : '원정'}</span>
+    ${t.logo ? `<img src="${esc(logoUrl(t.logo))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" width="24" height="24" onerror="if(!this.dataset.f&&this.src!=='${esc(t.logo)}'){this.dataset.f=1;this.src='${esc(t.logo)}'}else this.style.visibility='hidden'">` : ''}
+    <span class="nm" title="${esc(t.name)}">${esc(t.name)}</span>${redCards(g, side)}${t.record ? `<span class="rec">${esc(t.record)}</span>` : ''}
+    <span class="sc">${showScore ? t.score : ''}</span></div>`;
+}
+
+function redCards(g, side) {
+  const n = (g.red_cards && g.red_cards[side]) || 0;
+  return n ? ` <span title="퇴장 ${n}명">${'<span class="rc"></span>'.repeat(n)}</span>` : '';
+}
+const fmtEra = p => p.era != null ? `ERA ${(+p.era).toFixed(2)}${p.ip != null ? ' · ' + p.ip.toFixed(1) + '이닝' : ''}` : 'ERA 정보 없음';
+function pitcherInfo(g) {
+  if (g.sport !== 'baseball' || !g.pitching) return '';
+  const p = g.pitching, row = (lab, x) => x ? `${lab} <b>${esc(x.name)}</b> <span class="muted">(${fmtEra(x)})</span>` : `${lab} <span class="muted">미정</span>`;
+  let html = `<div class="info">⚾ 선발 · ${row('원정', p.away_starter)}<br>⚾ 선발 · ${row('홈', p.home_starter)}`;
+  const c = p.current;
+  if (g.state === 'in' && c && c.name) {
+    const team = c.side === 'home' ? '홈' : c.side === 'away' ? '원정' : '';
+    html += `<br>🎯 현재 투수(${team}) <b>${esc(c.name)}</b> <span class="muted">(${fmtEra(c)}${c.today ? ' · 오늘 ' + esc(c.today) : ''})</span> ${c.is_starter ? '· 선발' : c.is_starter === false ? '· 구원' : ''}`;
+  }
+  if (p.status === 'unavailable') html += `<br><span class="warn">투수 기록을 가져오지 못해 팀 평균 실점률만 사용</span>`;
+  else if (p.status === 'partial') html += `<br><span class="warn">일부 투수 기록 없음 → 해당 팀은 팀 평균 실점률 사용</span>`;
+  return html + '</div>';
+}
+function redCardInfo(g) {
+  const r = g.red_cards;
+  if (!r || !(r.events || []).length) return '';
+  return `<div class="info">${r.events.map(e => `<span class="rc"></span> ${esc(e.player || '')} ${esc(e.minute || '')} (${e.side === 'home' ? '홈' : '원정'} 퇴장)`).join('<br>')}
+    ${g.state === 'in' ? '<br><span class="muted">퇴장 반영: 해당 팀 득점률 ×0.67, 상대 ×1.25 (1명당, 근사치)</span>' : ''}</div>`;
+}
+
+function modelDetails(g) {
+  const m = g.model || {};
+  const parts = Object.entries(m).filter(([k, v]) => v !== null && v !== undefined)
+    .map(([k, v]) => `<code>${esc(k)}=${esc(typeof v === 'number' ? +v.toFixed(3) : v)}</code>`);
+  const d = g.detail || {};
+  if (g.sport === 'baseball' && g.state === 'in') {
+    const b = d.bases || 0; parts.push(`<code>주자=${[b&1?'1루':'', b&2?'2루':'', b&4?'3루':''].filter(Boolean).join(',') || '없음'}</code>`);
+    if (d.state_source) parts.push(`<code>상태출처=${esc(d.state_source)}</code>`);
+  }
+  if (d.clock_estimated) parts.push('<code>남은시간=추정</code>');
+  return `<details><summary>모델 입력값 · 출처 ${esc(g.source)}</summary>${parts.join(' ')}</details>`;
+}
+
+function spark(series, key) {
+  if (!series || series.length < 2) return '';
+  const w = 90, h = 22, vals = series.map(x => x[key]).filter(v => v != null);
+  if (vals.length < 2) return '';
+  const lo = Math.min(...vals), hi = Math.max(...vals), rng = Math.max(hi - lo, 0.01);
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1) * w).toFixed(1)},${(h - (v - lo) / rng * (h - 2) - 1).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" style="background:#0f1420;border-radius:3px"><polyline fill="none" stroke="#e0483e" stroke-width="1.5" points="${pts}"/></svg>`;
+}
+const pp = x => (x > 0 ? '+' : '') + x.toFixed(1) + '%p';
+const mlFmt = x => x == null ? '-' : (x > 0 ? '+' : '') + Math.round(x);
+function marketInfo(g) {
+  const m = g.market;
+  if (!m) return g.market_note ? `<div class="mkt muted">💱 ${esc(g.market_note)}</div>` : '';
+  const o = m.open_p, c = m.current_p, mv = m.movement;
+  const side = mv && mv.toward !== 'flat' ? (mv.toward === 'home' ? `홈 ${esc(g.home.short)} 쪽으로 이동` : `원정 ${esc(g.away.short)} 쪽으로 이동`) : '큰 변동 없음';
+  const series = [...(o ? [{h: o.home}] : []), ...(m.series || [])];
+  return `<div class="mkt">💱 배당흐름(${esc(m.provider)}${m.live_p ? ', 라이브' : ''}): 홈 ${o ? pct(o.home) : '-'} → <b>${pct(c.home)}</b>
+    ${mv ? `<span class="${mv.home_pp > 0 ? 'up' : mv.home_pp < 0 ? 'down' : ''}">(${pp(mv.home_pp)})</span>` : ''} · ${side} ${spark(series, 'h')}
+    <span class="muted">홈 ${mlFmt((m.live_line || m.pregame_line || {}).home)} / ${g.sport === 'soccer' ? '무 ' + mlFmt((m.live_line || m.pregame_line || {}).draw) + ' / ' : ''}원정 ${mlFmt((m.live_line || m.pregame_line || {}).away)} · 저장 스냅샷 ${m.snapshots}개</span></div>`;
+}
+function upsetInfo(g) {
+  const u = g.upset;
+  if (!u || u.level === 'none') return '';
+  const t = u.underdog === 'home' ? `홈 ${esc(g.home.short)}` : `원정 ${esc(g.away.short)}`;
+  return `<div class="upset ${u.level}">${u.level === 'strong' ? '🔥 역배 가능성 높음' : '👀 역배 관심'}: ${t} — 모델 ${pct(u.model_p)} vs 시장 ${pct(u.market_p)} (${pp(u.edge * 100)}), 배당 ${mlFmt(u.odds)} 기준 기대값 ${u.ev != null ? pp(u.ev * 100).replace('%p', '%') : '-'}<br><span class="muted">통계적 추정치이며 베팅 권유가 아닙니다.</span></div>`;
+}
+function analysisPanel(g) {
+  const f = g.factors || [];
+  if (!f.length) return '';
+  const st = {reflected: '반영', info: '참고', unavailable: '미반영/데이터 없음'};
+  const rows = f.map(x => {
+    const e = x.effect_pp;
+    const eff = e ? `홈 ${pp(e.home)}<br>원정 ${pp(e.away)}` : '-';
+    return `<tr><td><b>${esc(x.label)}</b><br><span class="st-${x.status}">${st[x.status] || x.status}</span></td><td>${esc(x.value || '')}${x.detail ? `<br><span class="muted">${esc(x.detail)}</span>` : ''}<br><span class="muted">출처: ${esc(x.source || '-')}</span></td><td class="eff">${eff}</td></tr>`;
+  }).join('');
+  return `<details class="ana"><summary>🔎 분석 상세 (${f.filter(x => x.status === 'reflected').length}개 요인 반영)</summary><table class="fac">${rows}</table></details>`;
+}
+
+function card(g) {
+  const live = g.state === 'in';
+  let label, main, sub = '';
+  const hasBlend = g.blend && g.final_prob;
+  if (live) { label = hasBlend ? '🔴 실시간 최종 확률 (모델+시장)' : '🔴 실시간 승리 확률'; main = hasBlend ? g.final_prob : g.live_prob;
+    sub = (hasBlend ? `<div class="plabel"><span>순수 모델</span></div>${probBar(g, g.live_prob, true)}` : '') + `<div class="plabel"><span>경기 전 모델 예측</span></div>${probBar(g, g.pregame_prob, true)}`; }
+  else if (g.state === 'post') { label = hasBlend ? '경기 전 최종 예측 (모델+시장, 참고)' : '경기 전 모델 예측 (참고)'; main = hasBlend ? g.final_prob : g.pregame_prob; }
+  else if (g.state === 'pre') { label = hasBlend ? '경기 전 최종 예측 (모델 30% + 시장 70%)' : '경기 전 예측 (모델)'; main = hasBlend ? g.final_prob : g.pregame_prob;
+    if (hasBlend) sub = `<div class="plabel"><span>순수 모델 ${pct(g.pregame_prob.home)} (홈) · 시장 ${pct(g.market.pregame_p.home)} (홈)</span></div>${probBar(g, g.pregame_prob, true)}`; }
+  else { label = ''; main = null; }
+  return `<div class="card ${live ? 'live' : ''}" data-gid="${esc(g.id)}">
+    <div class="top"><span>${esc(g.league_name)} · ${esc(g.start_kst)} KST</span><span class="hd-r"><span class="status ${live ? 'live' : ''}">${esc(g.status_text || '')}</span></span></div>
+    ${teamRow(g, 'away')}${teamRow(g, 'home')}
+    ${main ? `<div class="plabel"><span>${label}</span></div>${probBar(g, main)}` : ''}${sub}
+    ${(g.state === 'pre' || live) && typeof mcPickHtml === 'function' ? mcPickHtml(g.mc_pick) : ''}
+    ${g.state === 'pre' ? calInfo(g) + riskHtml(g.risk) : ''}${marketInfo(g)}${upsetInfo(g)}${g.state === 'pre' ? recHtml(g.recommend) : ''}
+    ${pitcherInfo(g)}${redCardInfo(g)}${typeof sportExtra === 'function' ? sportExtra(g) : ''}
+    ${analysisPanel(g)}
+    ${modelDetails(g)}</div>`;
+}
+
+const SPORT_TABS = ['soccer', 'baseball', 'basketball', 'hockey', 'volleyball'];
+const openGameDetails = new Set();   // "gid|summary" of <details> the user opened: kept open across the 30 s refresh
+function skeleton(n = 3) {
+  return `<div class="grid" aria-busy="true" aria-label="불러오는 중">${Array.from({length: n}, () => '<div class="skel"><i class="s"></i><i class="t"></i><i class="t"></i><i class="b"></i><i></i></div>').join('')}</div>`;
+}
+function errorBox(msg, retry) {
+  return `<div class="errbox" role="alert">⚠️ ${esc(msg)}<br><button type="button" class="btn sm" onclick="${retry}">다시 시도</button></div>`;
+}
+function render() {
+  if (!SPORT_TABS.includes(sport)) return;
+  const el = document.getElementById('games');
+  if (!data) { if (!el.innerHTML) el.innerHTML = skeleton(4); return; }
+  const all = data.games[sport] || [];
+  const leagues = [...new Set(all.map(g => g.league_name))];
+  if (leagueFilter !== 'all' && !leagues.includes(leagueFilter)) leagueFilter = 'all';
+  const q = typeof searchMatch === 'function' ? searchMatch : () => true;
+  const qs = all.filter(g => q(g.home.name, g.away.name, g.home.short, g.away.short, g.league_name));
+  document.getElementById('filters').innerHTML = ['all', ...leagues].map(l =>
+    `<button type="button" class="chip ${l === leagueFilter ? 'active' : ''}" data-l="${esc(l)}" aria-pressed="${l === leagueFilter}">${l === 'all' ? '전체' : esc(l)} (${l === 'all' ? qs.length : qs.filter(g => g.league_name === l).length})</button>`).join('');
+  document.querySelectorAll('#filters .chip').forEach(c => c.onclick = () => { leagueFilter = c.dataset.l; render(); });
+  const gs = qs.filter(g => leagueFilter === 'all' || g.league_name === leagueFilter);
+  const sec = (title, list) => `<h2>${title} <span class="muted">${list.length}경기</span></h2>` +
+    (list.length ? `<div class="grid">${list.map(card).join('')}</div>` : `<div class="empty">${all.length && !qs.length ? '검색 결과가 없습니다.' : '해당 경기가 없습니다.'}</div>`);
+  const cancel = gs.filter(g => g.state === 'cancel');
+  const head = typeof sportHeader === 'function' ? sportHeader(sport) : '';
+  if (!all.length && head) { el.innerHTML = head + `<div class="empty">지금(어제~내일) 표시할 경기가 없습니다.</div>`; document.getElementById('explain').innerHTML = EXPLAIN[sport]; if (typeof setFresh === 'function') setFresh('games', data.updated_at); return; }
+  el.innerHTML = head +
+    sec('🔴 진행 중', gs.filter(g => g.state === 'in')) +
+    sec('🕒 예정', gs.filter(g => g.state === 'pre')) +
+    sec('✅ 종료', gs.filter(g => g.state === 'post')) +
+    (cancel.length ? sec('⛔ 연기/취소', cancel) : '');
+  el.querySelectorAll('.card[data-gid] details').forEach(d => {
+    const k = d.closest('.card').dataset.gid + '|' + (d.querySelector('summary')?.textContent || '').slice(0, 8);
+    if (openGameDetails.has(k)) d.open = true;
+    d.addEventListener('toggle', () => { d.open ? openGameDetails.add(k) : openGameDetails.delete(k); });
+  });
+  document.getElementById('explain').innerHTML = EXPLAIN[sport];
+  if (typeof setFresh === 'function') setFresh('games', data.updated_at);
+}
+
+let lastGamesSig = null;
+async function load() {
+  try {
+    const [g, s] = await Promise.all([fetch('/api/games').then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+                                      fetch('/api/sources').then(r => r.json()).catch(() => null)]);
+    const sig = g.updated_at + '|' + Object.values(g.games || {}).reduce((a, x) => a + x.length, 0);
+    data = g;
+    if (sig !== lastGamesSig) { lastGamesSig = sig; render(); }      // unchanged data (ETag 304) → no re-render
+    else if (typeof setFresh === 'function' && SPORT_TABS.includes(sport)) setFresh('games', data.updated_at);
+    if (s) document.getElementById('sources').innerHTML = Object.entries(s.sources || {}).map(([k, v]) =>
+      `<div><span class="${v.ok ? 'ok' : 'bad'}">●</span> ${esc(v.league_name)} <span class="muted">(${esc(k)})</span> — ${v.ok ? `${v.games}경기, 전력데이터 ${v.strength_teams}팀` : '오류'}</div>`).join('');
+  } catch (e) {
+    if (!data && SPORT_TABS.includes(sport)) document.getElementById('games').innerHTML = errorBox('경기 데이터를 불러오지 못했습니다: ' + e.message, 'load()');
+    document.getElementById('updated').textContent = '불러오기 실패 · 재시도 중';
+  }
+  countdown = REFRESH;
+}
+
+/* ---------------- what-if calculator ---------------- */
+const WHATIF = {
+  soccer: `<h3>🧮 가상 시나리오 계산기 (축구)</h3>
+    <div class="row"><div><label>홈 득점</label><input id="w_hg" type="number" min="0" value="1"></div><div><label>원정 득점</label><input id="w_ag" type="number" min="0" value="0"></div></div>
+    <label>경과 시간(분)</label><input id="w_min" type="number" min="0" max="100" value="70">
+    <div class="row"><div><label>홈 기대득점 λ(90분)</label><input id="w_lh" type="number" step="0.05" value="1.51"></div><div><label>원정 기대득점 λ</label><input id="w_la" type="number" step="0.05" value="1.20"></div></div>
+    <div class="row"><div><label>홈 퇴장 수</label><input id="w_hrc" type="number" min="0" max="4" value="0"></div><div><label>원정 퇴장 수</label><input id="w_arc" type="number" min="0" max="4" value="0"></div></div>`,
+  baseball: `<h3>🧮 가상 시나리오 계산기 (야구)</h3>
+    <div class="row"><div><label>리그</label><select id="w_lg"><option value="mlb">MLB</option><option value="kbo">KBO</option></select></div><div><label>이닝</label><input id="w_inn" type="number" min="1" value="7"></div></div>
+    <div class="row"><div><label>초/말</label><select id="w_half"><option value="top">초 (원정 공격)</option><option value="bottom">말 (홈 공격)</option></select></div><div><label>아웃</label><select id="w_outs"><option>0</option><option>1</option><option>2</option></select></div></div>
+    <div class="cb"><label class="toggle"><input type="checkbox" id="w_1">1루</label><label class="toggle"><input type="checkbox" id="w_2">2루</label><label class="toggle"><input type="checkbox" id="w_3">3루</label></div>
+    <div class="row"><div><label>홈 점수</label><input id="w_hr" type="number" min="0" value="3"></div><div><label>원정 점수</label><input id="w_ar" type="number" min="0" value="2"></div></div>`,
+  basketball: `<h3>🧮 가상 시나리오 계산기 (농구)</h3>
+    <div class="row"><div><label>리그</label><select id="w_blg"><option value="nba">NBA</option><option value="wnba">WNBA</option><option value="kbl">KBL</option></select></div><div><label>쿼터 (5+ = 연장)</label><input id="w_q" type="number" min="1" max="8" value="4"></div></div>
+    <div class="row"><div><label>쿼터 남은 시간(분)</label><input id="w_cl" type="number" step="0.1" min="0" value="3"></div><div><label>사전 우위(홈, 점)</label><input id="w_edge" type="number" step="0.5" value="2.5"></div></div>
+    <div class="row"><div><label>홈 점수</label><input id="w_hp" type="number" min="0" value="98"></div><div><label>원정 점수</label><input id="w_ap" type="number" min="0" value="92"></div></div>`,
+  hockey: `<h3>🧮 가상 시나리오 계산기 (아이스하키)</h3>
+    <div class="row"><div><label>피리어드 (4 = 연장, 5 = 승부샷)</label><input id="w_hpd" type="number" min="1" max="5" value="3"></div><div><label>피리어드 남은 시간(분)</label><input id="w_hcl" type="number" step="0.5" min="0" max="20" value="5"></div></div>
+    <div class="row"><div><label>홈 득점</label><input id="w_hhg" type="number" min="0" value="2"></div><div><label>원정 득점</label><input id="w_hag" type="number" min="0" value="2"></div></div>
+    <div class="row"><div><label>홈 기대득점 λ(60분)</label><input id="w_hlh" type="number" step="0.1" value="3.1"></div><div><label>원정 기대득점 λ</label><input id="w_hla" type="number" step="0.1" value="2.9"></div></div>`,
+  volleyball: `<h3>🧮 가상 시나리오 계산기 (배구)</h3>
+    <div class="row"><div><label>홈 세트</label><input id="w_vsh" type="number" min="0" max="2" value="1"></div><div><label>원정 세트</label><input id="w_vsa" type="number" min="0" max="2" value="1"></div></div>
+    <div class="row"><div><label>현재 세트 홈 점수</label><input id="w_vph" type="number" min="0" value="20"></div><div><label>현재 세트 원정 점수</label><input id="w_vpa" type="number" min="0" value="18"></div></div>
+    <label>홈팀 랠리 승률 q (0.50 = 대등)</label><input id="w_vq" type="number" step="0.01" min="0.35" max="0.65" value="0.51">`,
+};
+function setupWhatif() {
+  const box = document.getElementById('whatif');
+  box.innerHTML = WHATIF[sport] + `<div id="w_out" style="margin-top:10px"></div>`;
+  box.querySelectorAll('input,select').forEach(el => el.addEventListener('input', runWhatif));
+  runWhatif();
+}
+async function runWhatif() {
+  const v = id => document.getElementById(id)?.value, c = id => document.getElementById(id)?.checked;
+  let url;
+  if (sport === 'soccer') url = `/api/whatif/soccer?home_goals=${v('w_hg')}&away_goals=${v('w_ag')}&minute=${v('w_min')}&lam_home=${v('w_lh')}&lam_away=${v('w_la')}&home_reds=${v('w_hrc')}&away_reds=${v('w_arc')}`;
+  else if (sport === 'baseball') url = `/api/whatif/baseball?league=${v('w_lg')}&inning=${v('w_inn')}&half=${v('w_half')}&outs=${v('w_outs')}&on1=${c('w_1')}&on2=${c('w_2')}&on3=${c('w_3')}&home_runs=${v('w_hr')}&away_runs=${v('w_ar')}`;
+  else if (sport === 'hockey') url = `/api/whatif/hockey?period=${v('w_hpd')}&clock_min=${v('w_hcl')}&home_goals=${v('w_hhg')}&away_goals=${v('w_hag')}&lam_home=${v('w_hlh')}&lam_away=${v('w_hla')}`;
+  else if (sport === 'volleyball') url = `/api/whatif/volleyball?sets_home=${v('w_vsh')}&sets_away=${v('w_vsa')}&pts_home=${v('w_vph')}&pts_away=${v('w_vpa')}&q=${v('w_vq')}`;
+  else url = `/api/whatif/basketball?league=${v('w_blg')}&period=${v('w_q')}&clock_min=${v('w_cl')}&edge=${v('w_edge')}&home_pts=${v('w_hp')}&away_pts=${v('w_ap')}`;
+  const out = document.getElementById('w_out');
+  try {
+    const r = await fetch(url); const j = await r.json();
+    if (!r.ok) { out.innerHTML = `<div class="bad" style="font-size:12px">${esc(j.detail && (j.detail.msg || JSON.stringify(j.detail)) || '입력 오류')}</div>`; return; }
+    out.innerHTML = probBar({sport, home: {short: ''}, away: {short: ''}}, j.prob);
+  } catch (e) { out.textContent = '계산 실패'; }
+}
+
+const XV = {proto: ['protoView', () => protoLoad()], upsets: ['upsetView', () => upsetsLoad()], perf: ['perfView', () => perfLoad()],
+            picks: ['picksView', () => typeof picksLoad === 'function' && picksLoad()],
+            backtest: ['btView', () => typeof btLoad === 'function' && btLoad()],
+            miss: ['missView', () => typeof missLoad === 'function' && missLoad()]};
+const SEARCH_TABS = ['soccer', 'baseball', 'basketball', 'hockey', 'volleyball', 'proto'];
+function selectTab(name) {
+  const b = document.querySelector(`#tabs button[data-sport="${name}"]`);
+  if (!b) return;
+  document.querySelectorAll('#tabs button').forEach(x => { x.classList.toggle('active', x === b); x.setAttribute('aria-selected', x === b); });
+  if (SPORT_TABS.includes(name)) { const hb = document.querySelector('#tabbar button[data-go="soccer"]'); if (hb) hb.dataset.home = name; }
+  document.querySelectorAll('#tabbar button').forEach(x => x.classList.toggle('active', x.dataset.go === name || (x.dataset.go === 'soccer' && SPORT_TABS.includes(name))));
+  b.scrollIntoView({block: 'nearest', inline: 'nearest'});
+  const changed = sport !== name;
+  sport = name; if (changed) leagueFilter = 'all';
+  const isP = !!XV[sport];
+  document.querySelectorAll('.xview').forEach(x => {
+    const on = isP && x.id === XV[sport][0];
+    x.style.display = on ? '' : 'none';
+    if (on && changed) { x.classList.remove('view-enter'); void x.offsetWidth; x.classList.add('view-enter'); if (!x.innerHTML.trim()) x.innerHTML = skeleton(3); }
+  });
+  const m = document.querySelector('main');
+  m.style.display = isP ? 'none' : '';
+  if (!isP && changed) { m.classList.remove('view-enter'); void m.offsetWidth; m.classList.add('view-enter'); }
+  document.getElementById('filters').style.display = isP ? 'none' : '';
+  document.getElementById('toolbar').style.display = SEARCH_TABS.includes(sport) ? '' : 'none';
+  if (changed) window.scrollTo({top: 0});
+  if (typeof freshFor === 'function') freshFor(sport);
+  if (typeof bestUpsetSync === 'function') bestUpsetSync();
+  if (typeof bestValSync === 'function') bestValSync();
+  if (isP) { XV[sport][1](); return; }
+  render(); setupWhatif();
+}
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => selectTab(b.dataset.sport));
+document.querySelectorAll('#tabbar button').forEach(b => b.onclick = () => selectTab(b.dataset.home || b.dataset.go));   // 홈 = last sport tab
+setInterval(() => { countdown--; document.getElementById('countdown').textContent = `· ${Math.max(countdown, 0)}초 후 자동 새로고침`; if (countdown <= 0) load(); }, 1000);
+// keep the sticky offset (header + tabs) in a CSS variable for the sticky kickoff-slot headers and jump scrolling
+(function () {
+  const st = document.getElementById('stick');
+  const set = () => document.documentElement.style.setProperty('--stick-h', st.offsetHeight + 'px');
+  set(); if (window.ResizeObserver) new ResizeObserver(set).observe(st); else window.addEventListener('resize', set);
+})();
+/* after an outage (pwa.js reconnect) or a long background pause: reload every visible data set, nothing stale kept */
+window.winprobRefreshAll = function () {
+  lastGamesSig = null; load();
+  if (typeof PROTO !== 'undefined' && typeof protoLoad === 'function') { PROTO.detail = {}; PROTO.liveSig = null; protoLoad(); }
+  if (XV[sport] && sport !== 'proto') XV[sport][1]();
+  if (typeof radarPoll === 'function') radarPoll();
+};
+document.addEventListener('DOMContentLoaded', () => { render(); load(); setupWhatif(); });  // after views.js / proto.js are loaded
+</script>
+<script src="static/views.js"></script>
+<script src="static/newsports.js"></script>
+<script src="static/mc.js"></script>
+<script src="static/proto.js"></script>
+<script src="static/miss.js"></script>
+<script src="static/upset.js"></script>
+<script src="static/upset_an.js"></script>
+<script src="static/best.js"></script>
+<script src="static/record.js"></script>
+<script src="static/features.js"></script>
+<script src="static/notify.js"></script>
+</body>
+</html>
