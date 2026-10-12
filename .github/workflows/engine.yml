@@ -12,6 +12,9 @@ on:
       force:
         description: "publish even if the box copy is fresh"
         default: "0"
+      loop_seconds:
+        description: "loop length (test runs: e.g. 400)"
+        default: "20100"
 permissions:
   contents: write
   actions: write
@@ -44,6 +47,7 @@ jobs:
         working-directory: engine
         env:
           FORCE: ${{ inputs.force }}
+          LOOP_SECONDS: ${{ inputs.loop_seconds || '20100' }}
           GH_TOKEN: ${{ github.token }}
         run: bash tools/actions_run.sh
       - name: re-dispatch next loop (queues behind this run)
