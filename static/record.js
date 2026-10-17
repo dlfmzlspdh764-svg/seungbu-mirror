@@ -1,0 +1,164 @@
+/* 📊 예측 성적 — tabs 1순위 · 2순위 · 💎 · 🔥 역배 · AI 예측 (user 2026-10-05, 역배 2026-10-11). Each tab = the real live picks frozen at kickoff and
+ * graded ONLY with the confirmed official result (app/proto.official_outcome; app games: ESPN/Naver final score):
+ *   ✅ 적중 / ❌ 미적중 / ⏳ 대기 (not final or not confirmed yet) / 취소 (취소·연기·적중특례 → not graded).
+ * Summary "적중 N · 미적중 M · 적중률 X%" + a per-match list (date, match, pick, odds, final score, result).
+ * No 백테스트 / 재계산 rows (deleted), no "실시간" wording. ★유력, 🧠 심리, 구 1.75+ and 가치 records stay in
+ * data/marks.sqlite (flagged hidden in the API) but are never shown. Data: /api/marks/record?sport=… (app/marks.py). */
+(function () {
+  const STYLE = `
+  .rc-tabs { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .rc-tab { flex:1 1 18%; min-width:0; min-height:44px; border-radius:10px; border:2px solid var(--border); background:var(--inset); color:var(--text);
+    font:inherit; font-weight:800; font-size:12px; padding:0 3px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rc-tab.jr_main.on { border-color:#facc15; background:rgba(250,204,21,.18); color:#fde047; }
+  .rc-tab.jr_sub.on { border-color:#7dd3fc; background:rgba(125,211,252,.14); color:#bae6fd; }
+  .rc-tab.gem.on { border-color:#22d3ee; background:linear-gradient(135deg,rgba(34,211,238,.18),rgba(168,85,247,.18)); color:#a5f3fc; }
+  .rc-v2 { display:inline-block; padding:0 5px; margin-left:4px; border-radius:6px; background:rgba(34,197,94,.18); color:#86efac; font-size:10.5px; font-weight:700; }
+  .rc-v2box { border-left:3px solid #22c55e; padding-left:8px; }
+  .rc-tab.yb.on { border-color:#f97316; background:rgba(249,115,22,.16); color:#fdba74; }
+  .rc-tab.ai.on { border-color:#c084fc; background:rgba(192,132,252,.14); color:#e9d5ff; }
+  .rc-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .rc-chips .chip { cursor:pointer; }
+  .rc-kpi { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px; margin-top:10px; }
+  .rc-kpi > div { background:var(--inset); border:1px solid var(--border); border-radius:10px; padding:8px; min-width:0; text-align:center; }
+  .rc-kpi b { display:block; font-size:21px; white-space:nowrap; } .rc-kpi span { font-size:11.5px; color:var(--muted); display:block; overflow-wrap:anywhere; }
+  .rc-kpi .h b { color:#4ade80; } .rc-kpi .m b { color:#f87171; }
+  .rc-sum { margin-top:8px; font-size:14px; font-weight:800; overflow-wrap:anywhere; }
+  .rc-sub { margin-top:3px; font-size:11.5px; color:var(--muted); overflow-wrap:anywhere; }
+  .rc-trend { margin-top:6px; font-size:12.5px; font-weight:700; color:#fbbf24; overflow-wrap:anywhere; }
+  .rc-t { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12.5px; margin-top:6px; }
+  .rc-t th, .rc-t td { padding:5px 4px; border-bottom:1px solid var(--divider); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rc-t th:first-child, .rc-t td:first-child { text-align:left; width:34%; }
+  .rc-list { list-style:none; margin:6px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .rc-it { background:var(--inset); border:1px solid var(--border); border-radius:10px; padding:7px 9px; min-width:0; border-left-width:4px; }
+  .rc-it.hit { border-left-color:#22c55e; } .rc-it.miss { border-left-color:#ef4444; } .rc-it.pending { border-left-color:#64748b; } .rc-it.void { border-left-color:#a3a3a3; opacity:.8; }
+  .rc-r1 { display:flex; gap:6px; font-size:11.5px; color:var(--muted); min-width:0; } .rc-r1 .lg { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rc-r2 { display:flex; gap:6px; align-items:baseline; margin-top:2px; min-width:0; }
+  .rc-tm { flex:1; min-width:0; font-weight:700; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rc-st { flex:0 0 auto; font-size:12.5px; font-weight:800; padding:1px 7px; border-radius:7px; white-space:nowrap; }
+  .rc-st.hit { background:#10331f; color:#4ade80; } .rc-st.miss { background:#3a1212; color:#fca5a5; }
+  .rc-st.pending { background:#1e293b; color:#cbd5e1; } .rc-st.void { background:#262626; color:#d4d4d4; }
+  .rc-r3 { display:flex; gap:6px; font-size:12.5px; margin-top:2px; min-width:0; }
+  .rc-cell { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rc-od { flex:0 0 auto; font-weight:800; }
+  .rc-sc { flex:0 0 auto; font-weight:800; color:var(--text); }
+  .rc-pre summary { cursor:pointer; font-weight:800; font-size:13px; margin-top:4px; }
+  .rc-upd { font-size:11px; color:var(--muted); font-weight:600; }`;
+  const st = document.createElement('style'); st.textContent = STYLE; document.head.appendChild(st);
+  const e = s => (typeof esc === 'function' ? esc(s) : String(s ?? ''));
+  const P = x => x == null ? '–' : (x * 100).toFixed(1) + '%';
+  const R = x => x == null ? '–' : `${x > 0 ? '+' : ''}${(x * 100).toFixed(1)}%`;
+  const DT = iso => iso ? new Date(iso).toLocaleString('ko-KR', {timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}) : '–';
+  const TABS = ['jr_main', 'jr_sub', 'gem', 'yb', 'ai'];   // 1순위 · 2순위 · 💎 1.70+ 고승산 · 🔥 역배 · AI 예측
+  const REC = window.REC = {mark: 'jr_main', sport: '', data: null, err: null};
+  const SPK = {soccer: '축구', baseball: '야구', basketball: '농구', volleyball: '배구', hockey: '아이스하키'};
+  const STK = {hit: '✅ 적중', miss: '❌ 미적중', pending: '⏳ 대기', void: '취소'};
+
+  function tabData(d, k) { return k === 'ai' ? d.ai : k === 'yb' ? d.yb : (d.marks || {})[k]; }
+  function cellText(r) {
+    const bt = r.bet_type || '';
+    const ln = r.line != null && bt !== '일반' && !bt.includes(String(Math.abs(r.line))) ? ` ${r.line > 0 && bt === '핸디캡' ? '+' : ''}${r.line}` : '';
+    return `${bt}${ln} ${r.label || ''}`.trim();
+  }
+  function gemVal(g) {
+    const o = g.oos || {}, b = g.baseline || {};
+    return `<div class="rc-sub">검증(백테스트, 실제 프로토 결과 ${g.wf_days || '–'}일): 기준 배당 ${Number(g.min_odds || 1.7).toFixed(2)}+ · 적중확률 ≥ ${Math.round((g.T || 0) * 100)}% · 내재확률 대비 +${Math.round((g.V || 0) * 100)}%p 이상 → 표본 밖 ${o.n || 0}경기 적중 ${o.hits ?? 0} (${P(o.hit)}) · ROI ${R(o.roi)} / 같은 기간 1.70+ 전체 칸 ${P(b.hit)} · ROI ${R(b.roi)}. 표본이 작아 참고용.</div>`;
+  }
+  function sumText(s) { return s && s.n ? `적중 ${s.hits} · 미적중 ${s.misses} · 적중률 ${P(s.hit_rate)}${s.hit_ci ? ` (n=${s.n}, 95% ${Math.round(s.hit_ci[0] * 100)}–${Math.round(s.hit_ci[1] * 100)}%)` : ''}` : '아직 채점된 경기가 없습니다'; }
+  function qualHtml(q) { return q && (q.lines || []).length ? `<div class="rc-sub rc-qual">${q.lines.map(l => `<div>🔎 ${e(l)}</div>`).join('')}</div>` : ''; }
+  function tpHtml(T) {   // 📌 고승산 추천 record (app/marks.tp_report): frozen at kickoff, confirmed results only
+    if (!T) return '';
+    const s = T.summary || {}, g = (T.tier || {}).gem || {}, f = (T.tier || {}).fill || {};
+    const tl = x => `${x.hits ?? 0}/${x.n ?? 0} (${P(x.hit_rate)}) · ROI ${R(x.roi)}${x.pending ? ` · 대기 ${x.pending}` : ''}`;
+    const rows = (T.by_round || []).map(x => `<tr><td>${x.round}회차</td><td>${x.hits}/${x.n}</td><td>${P(x.hit_rate)}</td><td>${R(x.roi)}</td></tr>`).join('');
+    const li = (T.list || []).filter(r => !r.pre).map(r => `<li class="rc-it ${r.status}"><div class="rc-r1"><span class="lg">${r.round ? r.round + '회차 · ' : ''}${DT(r.kickoff)} · ${e(r.league || '')}</span><span>${r.tier === 'gem' ? '💎' : '◇ 보충'}</span></div>
+      <div class="rc-r2"><span class="rc-tm">${e(r.home)} vs ${e(r.away)}</span><span class="rc-st ${r.status}">${STK[r.status] || ''}</span></div>
+      <div class="rc-r3"><span class="rc-cell">픽 ${e(cellText(r))}</span><span class="rc-od">@${r.odds ? Number(r.odds).toFixed(2) : '–'}</span><span class="rc-sc">${r.score ? '최종 ' + e(r.score) : r.status === 'void' ? e(r.void_why || '취소') : '결과 대기'}</span></div></li>`).join('');
+    return `<details class="card rc-tp" style="margin-top:10px" ${REC.tpOpen ? 'open' : ''}><summary style="font-weight:800;cursor:pointer;min-height:32px">📌 고승산 추천픽 성적 · ${s.n ? `${s.hits}/${s.n} (${P(s.hit_rate)})` : '채점 전'}</summary>
+      <div class="rc-sub">기록 시작: ${e(T.since || '121회차')} · 경기 시작 시점 추천 목록 그대로 고정 · 확정 결과로만 채점</div>
+      <div class="rc-kpi"><div class="h"><b>${s.hits ?? 0}</b><span>✅ 적중</span></div><div class="m"><b>${s.misses ?? 0}</b><span>❌ 미적중</span></div><div><b>${P(s.hit_rate)}</b><span>적중률</span></div></div>
+      <div class="rc-sub">ROI ${R(s.roi)} (표시 배당·1단위)${s.pending ? ` · ⏳ 대기 ${s.pending}` : ''}${s.void ? ` · 취소 ${s.void}` : ''}</div>
+      <div class="rc-sub">💎 기준 통과: ${tl(g)}<br>◇ 보충: ${tl(f)}</div>
+      ${rows ? `<table class="rc-t"><tr><th>회차</th><th>적중</th><th>적중률</th><th>ROI</th></tr>${rows}</table>` : ''}
+      ${li ? `<ul class="rc-list">${li}</ul>` : '<div class="muted sm" style="margin-top:6px">아직 시작된 추천 경기가 없습니다.</div>'}</details>`;
+  }
+  function render() {
+    const v = document.getElementById('perfView');
+    if (!v) return;
+    const d = REC.data;
+    if (!d) { v.innerHTML = REC.err ? `<div class="errbox" role="alert">⚠️ 예측 성적 불러오기 실패: ${e(REC.err)}</div>` : '<div class="card"><div class="skel"><i class="s"></i><i></i><i></i></div></div>'; return; }
+    const keys = TABS.filter(k => tabData(d, k));
+    if (!keys.length) { v.innerHTML = '<div class="card"><div class="muted">예측 성적 기록이 아직 없습니다.</div></div>'; return; }
+    if (!keys.includes(REC.mark)) REC.mark = keys[0];
+    const M = tabData(d, REC.mark), s = M.summary || {};
+    const tabs = keys.map(k => [k, tabData(d, k)]).map(([k, x]) => `<button type="button" class="rc-tab ${k} ${k === REC.mark ? 'on' : ''}" data-mark="${k}" aria-pressed="${k === REC.mark}">${e(x.name)} <span style="font-weight:600">${x.summary && x.summary.n ? P(x.summary.hit_rate) : ''}</span></button>`).join('');
+    const sports = ['', ...(d.sports || [])].map(sp => `<span class="chip ${sp === REC.sport ? 'active' : ''}" data-sp="${e(sp)}">${sp ? e(SPK[sp] || sp) : '전체 종목'}</span>`).join('');
+    const days = (M.by_day || []).map(x => `<tr><td>${e(x.k)}</td><td>${x.hits}</td><td>${x.misses}</td><td>${P(x.hit_rate)}</td></tr>`).join('');
+    const spRows = !REC.sport && (M.by_sport || []).length ? `<div class="card" style="margin-top:10px"><h3 style="margin:0">종목별</h3><table class="rc-t"><tr><th>종목</th><th>적중</th><th>미적중</th><th>적중률</th></tr>${M.by_sport.map(x => `<tr><td>${e(x.name)}</td><td>${x.hits}</td><td>${x.misses}</td><td>${P(x.hit_rate)}</td></tr>`).join('')}</table></div>` : '';
+    const item = r => `<li class="rc-it ${r.status}">
+        <div class="rc-r1"><span class="lg">${DT(r.kickoff)} · ${e(SPK[r.sport] || r.sport || '')} · ${e(r.league || '')}</span></div>
+        <div class="rc-r2"><span class="rc-tm">${e(r.home)} vs ${e(r.away)}${r.en ? `<span class="muted" style="display:block;font-size:10.5px;font-weight:500">${e(r.en)}</span>` : ''}</span><span class="rc-st ${r.status}">${STK[r.status] || ''}</span></div>
+        <div class="rc-r3"><span class="rc-cell">픽 ${e(cellText(r))}${r.rule === 'v2' ? ' <small class="rc-v2">신규칙</small>' : ''}</span><span class="rc-od">@${r.odds ? Number(r.odds).toFixed(2) : '–'}</span><span class="rc-sc">${r.status === 'void' ? e(r.void_why || '취소') : r.score ? '최종 ' + e(r.score) : r.pre ? '경기 전' : r.status === 'pending' ? '결과 대기' : ''}</span></div></li>`;
+    const all = M.list || [];
+    const started = all.filter(r => !r.pre), upcoming = all.filter(r => r.pre).reverse();   // 경기 전: kickoff 순
+    const list = started.map(item).join('');
+    const preList = upcoming.length ? `<details class="rc-pre" ${REC.preOpen ? 'open' : ''}><summary>⏳ 경기 전 기록된 픽 ${upcoming.length}개 (시작 시각에 고정)</summary><ul class="rc-list">${upcoming.map(item).join('')}</ul></details>` : '';
+    const pv = M.provenance;
+    const ybNote = REC.mark === 'yb' && pv ? `<div class="rc-sub">기록 방식: 역배 메뉴에 표시된 픽을 경기 시작 전에 저장(시작 시각에 고정, 이후 수정 없음). ${pv.n_history ? `이전 기록 ${pv.n_history}건(${e((pv.history_since || '').slice(0, 10))}~, 같은 역배 규칙으로 경기 전 저장된 앱 경기·프로토 앱 연동 픽)을 포함` : '이전 기록 없음 — 새로 시작'}${pv.n_snapshot ? ` · 메뉴 스냅샷 ${pv.n_snapshot}건` : ''}.</div>` : '';
+    v.innerHTML = `<div class="card pmeta"><h2 style="margin:0">📊 예측 성적 <span class="muted" style="font-size:13px">1순위 · 2순위 · 💎 · 🔥 역배 · AI 예측</span></h2>
+      <div class="rc-tabs">${tabs}</div>
+      <div class="rc-chips">${sports}</div>
+      <div class="muted sm" style="margin-top:8px">${e(M.name)} = ${e(M.desc)}</div>
+      ${REC.mark === 'gem' && d.gem_validation ? gemVal(d.gem_validation) : ''}${REC.mark === 'gem' ? tpHtml(d.tp) : ''}${ybNote}${REC.mark === 'yb' && s.v2 ? `<div class="rc-sub rc-v2box">🆕 <b>신규칙</b>(2026-10-12~: 핸디·언더/오버·일반 전 유형 배당 ${'2.00'}~${Number((s.v2_rule || {}).max_odds || 4.5).toFixed(2)}, 적중확률 ${Math.round(((s.v2_rule || {}).T || 0.4) * 100)}%+ · 시장 이상) 기록 ${s.v2.n}건 · ${s.v2.graded ? `적중 ${s.v2.hits} · 미적중 ${s.v2.miss} (${P(s.v2.hit_rate)}, ROI ${R(s.v2.roi)})` : '아직 채점 전'} — 이전 기록은 그대로 둠${(s.v2_rule || {}).wf ? ` · 백테스트 n=${s.v2_rule.wf.n} 적중 ${P(s.v2_rule.wf.hit)} ROI ${R(s.v2_rule.wf.roi)}` : ''}</div>` : ''}
+      <div class="rc-kpi"><div class="h"><b>${s.hits ?? 0}</b><span>✅ 적중</span></div><div class="m"><b>${s.misses ?? 0}</b><span>❌ 미적중</span></div><div><b>${P(s.hit_rate)}</b><span>적중률</span></div></div>
+      <div class="rc-sum">${e(sumText(s))}</div>
+      ${M.trend && M.trend.text ? `<div class="rc-trend">📉 최근 추세 · ${e(M.trend.text)}</div>` : ''}
+      ${qualHtml(M.quality)}
+      <div class="rc-sub">${s.pending ? `⏳ 대기 ${s.pending}경기${s.pre ? ` (경기 전 ${s.pre})` : ''} · ` : ''}${s.void ? `취소 ${s.void}경기 · ` : ''}${s.roi != null ? `참고 ROI ${R(s.roi)} (1단위)` : ''}</div></div>
+      <div class="card" style="margin-top:10px"><h3 style="margin:0">경기별 결과 <span class="muted" style="font-size:12px">${started.length}경기</span> <span class="rc-upd">· 자동 갱신 ${REC.at ? e(REC.at) : ''}</span></h3>
+        ${list ? `<ul class="rc-list">${list}</ul>` : '<div class="muted">아직 시작된 경기가 없습니다.</div>'}${preList}</div>
+      <div class="card" style="margin-top:10px"><h3 style="margin:0">날짜별</h3>
+        ${days ? `<table class="rc-t"><tr><th>날짜</th><th>적중</th><th>미적중</th><th>적중률</th></tr>${days}</table>` : '<div class="muted">아직 채점된 경기가 없습니다.</div>'}</div>
+      ${spRows}
+      ${(d.marks || {}).ext7m ? `<div class="muted sm" style="margin-top:8px">🌐 외부 예측 추적 (7M 마카오 → 프로토 일반, 1순위·2순위 미반영): ${e(sumText((d.marks.ext7m || {}).summary))}</div>` : ''}
+      <div class="pdisc" style="margin-top:10px">⚠️ ${e(d.note)}</div>`;
+    v.querySelectorAll('[data-mark]').forEach(b => b.onclick = () => { REC.mark = b.dataset.mark; REC.userPicked = true; render(); });
+    v.querySelectorAll('[data-sp]').forEach(c => c.onclick = () => { REC.sport = c.dataset.sp; load(); });
+    const tpd = v.querySelector && v.querySelector('.rc-tp');
+    if (tpd) tpd.addEventListener('toggle', () => { REC.tpOpen = tpd.open; });
+    if (v.insertAdjacentHTML) v.insertAdjacentHTML('beforeend', comboRecHtml(REC.combo) + l24RecHtml(REC.l24) + l24RecHtml(REC.asp, '🤝 API예측 일치 성적'));
+    const pd = v.querySelector && v.querySelector('.rc-pre');
+    if (pd) pd.addEventListener('toggle', () => { REC.preOpen = pd.open; });
+  }
+  /* 🎯 조합 추천 성적 (app/combo.record): frozen slips, confirmed results only */
+  function comboRecHtml(C) {
+    if (!C) return '';
+    const one = (x, nm) => !x || !x.slips ? `<div>${nm}: 아직 채점 전</div>`
+      : `<div>${nm}: 슬립 ${x.slips}장 · 적중 ${x.hits} (${Math.round(x.hits / x.slips * 100)}%) · 투입 ${x.stake.toLocaleString()}원 → 회수 ${x.ret.toLocaleString()}원 (ROI ${x.roi != null ? (x.roi * 100).toFixed(1) + '%' : '-'})</div>`;
+    return `<div class="card combo-rec"><h3 style="margin:0 0 6px">🎯 조합 추천 성적</h3>${one(C.primary, '단폴 3개')}${one(C.alt, '2폴더×3')}<div class="muted sm">확정 결과만 채점 · 회차당 30,000원 기준</div></div>`;
+  }
+  function l24RecHtml(L, title) {
+    if (!L) return '';
+    return `<div class="card combo-rec"><h3 style="margin:0 0 6px">${title || '🤝 24live 일치 성적'}</h3><div>${L.n ? `적중 ${L.hits}/${L.n} (${Math.round(L.hit * 100)}%) · ROI ${(L.roi * 100).toFixed(1)}%` : '아직 채점 전'}${L.pending ? ` · 대기 ${L.pending}` : ''}</div><div class="muted sm">${e(L.note || '')}</div></div>`;
+  }
+  async function load(auto) {
+    fetch('/api/asp/record').then(r => r.ok ? r.json() : null).then(c => { if (c && JSON.stringify(c) !== JSON.stringify(REC.asp)) { REC.asp = c; if (REC.data) render(); } }).catch(() => {});
+    fetch('/api/l24/record').then(r => r.ok ? r.json() : null).then(c => { if (c && JSON.stringify(c) !== JSON.stringify(REC.l24)) { REC.l24 = c; if (REC.data) render(); } }).catch(() => {});
+    fetch('/api/combo/record').then(r => r.ok ? r.json() : null).then(c => { if (c && JSON.stringify(c) !== JSON.stringify(REC.combo)) { REC.combo = c; if (REC.data) render(); } }).catch(() => {});
+    try {
+      const r = await fetch('/api/marks/record' + (REC.sport ? `?sport=${encodeURIComponent(REC.sport)}` : ''));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const txt = await r.text();
+      REC.at = new Date().toLocaleTimeString('ko-KR', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false});
+      const same = REC.raw === txt && REC.data;
+      REC.raw = txt; REC.data = JSON.parse(txt); REC.err = null;
+      if (same && auto) { const u = document.querySelector('#perfView .rc-upd'); if (u) u.textContent = `· 자동 갱신 ${REC.at}`; return; }   // nothing new: keep the DOM (scroll, open panels)
+    } catch (x) { REC.err = String(x.message || x); }
+    render();
+    // the global 🚨 radar banner keeps working although its panel is no longer shown here
+    if (typeof radarBannerRender === 'function') fetch('/api/radar').then(r => r.ok ? r.json() : null).then(rd => rd && radarBannerRender(rd)).catch(() => {});
+  }
+  window.recordLoad = load;
+  // results come in while the screen is open: refresh every 45 s and when the app comes back to the foreground
+  if (typeof window.setInterval === 'function') window.setInterval(() => { if (typeof sport !== 'undefined' && sport === 'perf' && document.visibilityState === 'visible') load(true); }, 45000);
+  if (typeof document.addEventListener === 'function') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && typeof sport !== 'undefined' && sport === 'perf') load(true); });
+})();
