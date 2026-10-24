@@ -1,0 +1,195 @@
+/* Service worker for 실시간 승부 예측 (served at /sw.js, scope "/").
+ * - App shell (/, /static/*, manifest, icons): network-first, cached copy only when offline.
+ * - /api/*: ALWAYS network-first with a 10 s timeout. A cached copy is returned only when the network fails, and
+ *   it is marked with the header `X-SW-Offline: 1` (+ `X-SW-Cached-At`) so the page shows the "마지막 업데이트 N시간 전 ·
+ *   서버 재연결 중" banner and keeps probing; once the network answers, fresh data is returned and cached again
+ *   (and the page drops the whole API cache on reconnect). Stale data is never presented as live.
+ * - v4 (2026-10-03): short /api timeout, /api/health never cached, page reloads once on controllerchange.
+ * - v8 (2026-10-05): weekly self-improve — changelog UI + LLM 429 cooldown.
+ * - v16 (2026-10-13): 🏆 검증된 최고 픽 · 🔥 역배 예상 경기 boxes collapsed by default (tap title to expand).
+ * - v20 (2026-10-15): 🤝 24live 일치 배지·목록·성적.
+ * - v21 (2026-10-15): 🤝 API예측 일치 배지·외부 예측 일치 목록·성적.
+ * - v22 (2026-10-15): 🏠 실시간 스코어 농구·배구 프로토 U/O 라인·진행/결과 배지.
+ * - v23 (2026-10-15): U/O 배지를 점수 아래 줄로 (팀명 잘림 수정).
+ * - v27 (2026-10-18): 배당 지연(마지막 수집 10분 초과) 경고 배너, ℹ️참고 → ℹ️가치 부족 표시.
+ * - v28 (2026-10-18): ⚠️ 분석 부족 배지 (m.gaps, 서버 22:41 재시작 후 표시).
+ * - v25 (2026-10-17): 캐시·예비 사본 응답이 더 새 데이터를 덮지 않음, 대체 응답 시 5초 내 실시간 재시도, SW 네트워크 1회 재시도, 새 버전 자동 새로고침.
+ * - v24 (2026-10-17): 신선도 배지 고정 버그 — 단조 증가 setFresh, 라이브 응답 즉시 다운/예비 모드 해제, 재개 20 s 새로고침.
+ * - v19 (2026-10-15): 🏠 실시간 스코어 24live 스타일 (리그별 그룹·세트 점수).
+ * - v18 (2026-10-15): 🎯 조합 추천 box + record section.
+ * - v17 (2026-10-13): 📌 고승산 추천픽 성적 in the 💎 record tab.
+ * - v15 (2026-10-13): 📌 고승산 추천 box collapsed by default (tap title to expand).
+ * - v9 (2026-10-05): ★주력/☆부주력 → 1순위/2순위 labels; 📊 예측 성적 shows only the 1순위·2순위 records.
+ * - v29 (2026-10-18): 2순위 removed from Proto cards / 예측 성적 → 🤖 AI 예측픽 (green "AI", "1순위 · AI 일치" on overlap, "AI 픽 없음(보류)").
+ * - v30 (2026-10-19): live period (세트/쿼터/전후반/이닝) as teal pill badge, distinct from score color.
+ * - v5 (2026-10-04): ⭐ 관심 / 🧮 조합·내 픽 menus removed — new shell so installed PWAs drop the old tabs.
+ * - v6 (2026-10-04): bottom bar 🏠홈 · 🎫프로토 · 🔥역배 · 📊예측성적 + ★주력 가치 픽 (market-flow model).
+ * - v7 (2026-10-04): every Proto card shows ★주력 + ☆부주력 (composite analysis score), old ★주력 1.75+ → (구).
+ * - Failures = network errors, timeouts AND upstream 5xx (502/503/504, Cloudflare 530 / "Error 1033" when the
+ *   tunnel is down). On such a failure navigation gets the cached shell and /api/* gets the cached copy; the page's
+ *   fetch wrapper (pwa.js) then retries with backoff and fails over to the other public origin (/api/netcfg).
+ * - Web Push: `push` shows the notification (payload built by app/notify.py) and tells open pages to refresh
+ *   their 🔔 list; `notificationclick` focuses/opens the app on the deep link (/#open=…) of the match card.
+ * The server substitutes __SW_VERSION__ with a hash of static/ so every deploy changes this file,
+ * the browser installs the new worker and old caches are deleted.
+ */
+const VERSION = 'v30-__SW_VERSION__';   // manual prefix bumped on big releases; the hash changes on every static/ edit
+const SHELL = `winprob-shell-${VERSION}`;
+const API = `winprob-api-${VERSION}`;
+const SHELL_URLS = ['/', '/static/pwa.js', '/static/views.js', '/static/live.js', '/static/newsports.js', '/static/mc.js', '/static/proto.js', '/static/miss.js', '/static/upset.js', '/static/upset_an.js', '/static/best.js', '/static/record.js',
+  '/static/features.js', '/static/notify.js', '/manifest.webmanifest', '/static/icons/badge-72.png',
+  '/static/icons/icon-192.png', '/static/icons/icon-512.png', '/static/icons/icon-maskable-512.png',
+  '/static/icons/apple-touch-icon.png', '/static/icons/favicon-32.png'];
+const NO_CACHE_API = [/^\/api\/whatif\//, /^\/api\/health/];   // calculators + reachability probes: never replayed
+const NAV_TIMEOUT_MS = 8000, API_TIMEOUT_MS = 10000, ASSET_TIMEOUT_MS = 20000;   // short /api timeout: fail over fast
+const upstreamFailed = res => res.status >= 500;   // 5xx incl. Cloudflare 530 (Error 1033: tunnel unreachable)
+
+/* fetch with a timeout; rejects on timeout just like a network error */
+function fetchT(req, init, ms) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  return fetch(req, Object.assign({}, init, {signal: ctl.signal})).finally(() => clearTimeout(t));
+}
+
+self.addEventListener('install', event => {
+  event.waitUntil(caches.open(SHELL)
+    .then(c => c.addAll(SHELL_URLS.map(u => new Request(u, {cache: 'reload'}))))
+    .then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys()
+    .then(keys => Promise.all(keys.filter(k => k.startsWith('winprob-') && k !== SHELL && k !== API).map(k => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
+
+async function apiNetworkFirst(req, url) {
+  const cacheable = !NO_CACHE_API.some(re => re.test(url.pathname));
+  let bad = null;                       // upstream 5xx response, returned only if nothing cached
+  try {
+    // 'no-cache' = always revalidate with the server (ETag → 304 for unchanged views), never a blind HTTP-cache hit
+    // quick network error (TLS reset / tunnel flap after a box freeze): retry once before any cached copy (2026-10-17)
+    const res = await fetchT(req, {cache: 'no-cache'}, API_TIMEOUT_MS).catch(async e => {
+      if (e && e.name === 'AbortError') throw e;
+      await new Promise(r => setTimeout(r, 800));
+      return fetchT(req, {cache: 'no-cache'}, 6000);
+    });
+    if (!upstreamFailed(res)) {
+      if (cacheable && res.ok) {
+        const body = await res.clone().arrayBuffer();
+        const h = new Headers(res.headers);
+        h.set('X-SW-Cached-At', new Date().toISOString());
+        caches.open(API).then(c => c.put(req, new Response(body, {status: res.status, headers: h})));
+      }
+      return res;
+    }
+    bad = res;
+  } catch (err) { /* network error / timeout -> cache */ }
+  const hit = cacheable && await caches.match(req, {cacheName: API});
+  if (hit) {
+    const h = new Headers(hit.headers);
+    h.set('X-SW-Offline', '1');
+    if (bad) h.set('X-SW-Upstream-Status', String(bad.status));
+    return new Response(await hit.arrayBuffer(), {status: 200, headers: h});
+  }
+  if (bad) return bad;
+  return new Response(JSON.stringify({offline: true, detail: '오프라인 상태이며 저장된 데이터가 없습니다.'}),
+    {status: 503, headers: {'Content-Type': 'application/json; charset=utf-8', 'X-SW-Offline': '1'}});
+}
+
+async function primaryUrl() {
+  try {
+    const r = await caches.match('/api/netcfg', {cacheName: API});
+    if (r) return (await r.json()).primary || null;
+  } catch (e) {}
+  return null;
+}
+
+async function retryPage() {
+  const primary = await primaryUrl();
+  const other = primary && primary !== self.location.origin
+    ? `<p><a style="color:#7cc4ff" href="${primary}/">기본 주소로 열기: ${primary}</a></p>` : '';
+  return new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>연결 재시도 중</title><body style="background:#0f1420;color:#e8edf5;font-family:sans-serif;padding:24px">' +
+    '<p>🔄 서버 연결 재시도/우회 중… 잠시 후 자동으로 다시 시도합니다.</p>' + other +
+    '<script>let n=+(sessionStorage.getItem("wpRetry")||0);sessionStorage.setItem("wpRetry",n+1);' +
+    'setTimeout(()=>location.reload(),Math.min(60000,3000*Math.pow(2,n)));</script></body>',
+    {status: 503, headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}});
+}
+
+async function shellNetworkFirst(req, isRoot) {
+  const key = isRoot ? '/' : req;
+  const net = fetch(req).then(res => {
+    if (upstreamFailed(res)) throw new Error('upstream ' + res.status);
+    if (res.ok && res.type === 'basic') {
+      const copy = res.clone();
+      caches.open(SHELL).then(c => c.put(key, copy));
+    }
+    return res;
+  });
+  net.catch(() => {});
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), isRoot ? NAV_TIMEOUT_MS : ASSET_TIMEOUT_MS));
+  try {
+    return await Promise.race([net, timeout]);
+  } catch (err) {
+    const hit = await caches.match(key, {cacheName: SHELL});
+    if (hit) return hit;
+    if (err.message === 'timeout') { try { return await net; } catch (e) {} }  // nothing cached: keep waiting
+    return isRoot ? retryPage() : Response.error();
+  }
+}
+
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;         // team logos etc.: browser default
+  if (url.pathname.startsWith('/api/')) { event.respondWith(apiNetworkFirst(req, url)); return; }
+  if (url.pathname === '/' || url.pathname.startsWith('/static/') || url.pathname === '/manifest.webmanifest') {
+    event.respondWith(shellNetworkFirst(req, url.pathname === '/'));
+  }
+});
+
+/* ---------------- Web Push ---------------- */
+self.addEventListener('push', event => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = {title: '실시간 승부 예측', body: event.data ? event.data.text() : ''}; }
+  const title = d.title || '실시간 승부 예측';
+  const opts = {
+    body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag, timestamp: d.ts ? d.ts * 1000 : Date.now(),
+    icon: '/static/icons/icon-192.png', badge: '/static/icons/badge-72.png', lang: 'ko',
+    data: {url: d.url || '/#open=notify', id: d.id || null, type: d.type || null},
+  };
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, opts),
+    self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(cs => cs.forEach(c => c.postMessage({type: 'push', id: d.id || null}))),
+  ]));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/#open=notify', self.location.origin).href;
+  event.waitUntil((async () => {
+    const cs = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
+    const c = cs.find(x => new URL(x.url).origin === self.location.origin);
+    if (c) {
+      try { await c.focus(); } catch (e) {}
+      c.postMessage({type: 'open', url});
+      return;
+    }
+    return self.clients.openWindow(url);
+  })());
+});
+
+/* the push service rotated our subscription: re-subscribe with the same key and tell the server */
+self.addEventListener('pushsubscriptionchange', event => {
+  event.waitUntil((async () => {
+    try {
+      const cfg = await fetch('/api/notify/config', {cache: 'no-store'}).then(r => r.json());
+      const raw = atob(cfg.vapid_public_key.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - cfg.vapid_public_key.length % 4) % 4));
+      const sub = await self.registration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, ch => ch.charCodeAt(0))});
+      if (event.oldSubscription) await fetch('/api/notify/unsubscribe', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({endpoint: event.oldSubscription.endpoint})}).catch(() => {});
+      await fetch('/api/notify/subscribe', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({subscription: sub.toJSON(), prefs: null})});
+    } catch (e) { /* the page re-registers on next open */ }
+  })());
+});

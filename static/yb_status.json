@@ -1,0 +1,33 @@
+{
+ "enabled": false,
+ "reason": "표본 부족 (좁힌 기준 0/40경기)",
+ "label": "검증 중 (추천 중단)",
+ "gate": {
+  "min_odds": 2.0,
+  "max_odds": 2.5,
+  "min_p": 0.4,
+  "exclude": "soccer 승무패/일반 (3-way)",
+  "window_days": 28,
+  "min_n": 40,
+  "oos_since": "2026-10-19"
+ },
+ "stats": {
+  "gate_4w": {
+   "n": 0
+  },
+  "all_4w": {
+   "n": 8,
+   "hits": 2,
+   "hit": 0.25,
+   "ci": [
+    0.0715,
+    0.5907
+   ],
+   "break_even": 0.2535,
+   "model_p": 0.2583,
+   "avg_odds": 4.625,
+   "roi": 0.1187
+  }
+ },
+ "updated": "2026-10-19T10:24+09:00"
+}

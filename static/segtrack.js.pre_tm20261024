@@ -1,0 +1,113 @@
+/* 💰 수익 구간 자동 추적 (/api/segments/track) — 정보 표시 전용, 픽·확률 변경 없음. */
+(function () {
+  const ST = window.SEGTRACK = {d: null, at: 0};
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const pct = x => x == null ? '–' : (x * 100 >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
+  ST.load = async function () {
+    if (ST.d && Date.now() - ST.at < 600000) return ST.d;
+    try { ST.d = await fetch('/api/segments/track').then(r => r.json()); ST.at = Date.now(); } catch (e) { ST.d = ST.d || {tracks: []}; }
+    return ST.d;
+  };
+  const ob = o => !o ? null : o < 1.70 ? '1.70 미만' : o < 2 ? '1.70–2.0' : o < 2.5 ? '2.0–2.5' : o < 3.5 ? '2.5–3.5' : '3.5+';
+  const pb = p => p == null ? null : p < .3 ? '30% 미만' : p < .4 ? '30–40%' : p < .5 ? '40–50%' : '50% 이상';
+  const eb = e => e == null ? null : e <= -.1 ? '−10% 이하' : e < -.05 ? '−10~−5%' : e < 0 ? '−5~0%' : '0% 이상';
+  const bb = t => { t = String(t || '').replace('전반 ', ''); for (const k of ['핸디캡', '언더/오버', '승①패', '일반', '머니라인']) if (t.startsWith(k)) return k; return t.split(' ')[0]; };
+  /* x: {fam, kind, sport, league, bet_type, p, odds} → matching active tracks */
+  ST.match = function (x) {
+    const d = ST.d; if (!d || !x || !x.odds) return [];
+    const f = {sport: x.sport, league: x.league, bet: bb(x.bet_type), odds_band: ob(x.odds), p_band: pb(x.p),
+      ev_band: eb(x.p != null ? x.p * x.odds - 1 : null), kind: x.kind};
+    f['sport×odds_band'] = f.sport && f.odds_band ? f.sport + '·' + f.odds_band : null;
+    return (d.tracks || []).filter(t => (t.status === 'candidate' || t.status === 'validated') && t.fam === x.fam && f[t.dim] === t.value);
+  };
+  ST.badge = function (x) {
+    const ts = ST.match(x); if (!ts.length) return '';
+    const v = ts.some(t => t.status === 'validated');
+    const tip = ts.map(t => `${t.fam} ${t.dim_ko}=${t.value} (${t.status === 'validated' ? '전진 검증 통과' : '후보'}, 전진 ${t.fwd_n || 0}건 ROI ${pct(t.fwd_roi)})`).join(' / ');
+    return `<span class="srcl ${v ? 'src-ok' : 'src-wait'}" title="${esc(tip)} · 정보 표시만, 픽 변경 없음">${v ? '💰 수익 구간' : '🔍 수익 후보'}</span>`;
+  };
+  ST.cardHtml = function (m) {
+    if (!ST.d) return '';
+    const r = m && m.recommend || {}, out = [];
+    for (const [k, kind] of [['best_prob', 'proto_rec_prob'], ['best_ev', 'proto_rec_ev']]) {
+      const b = r[k]; if (!b) continue;
+      const h = ST.badge({fam: '일반', kind, sport: m.sport, league: m.league, bet_type: b.bet_type, p: b.p, odds: b.odds});
+      if (h && !out.some(o => o.h === h)) out.push({h, t: `${b.bet_type} ${b.label || ''}`});
+    }
+    const u = m && m.upset_pick;
+    if (u && u.status === 'pick' && u.odds) {
+      const h = ST.badge({fam: '역배', kind: 'proto_upset_pick', sport: m.sport, league: m.league, bet_type: u.bet_type, p: u.p, odds: u.odds});
+      if (h) out.push({h, t: '역배 ' + (u.label || '')});
+    }
+    return out.length ? `<div class="mc-src">${out.map(o => `${o.h} <span class="muted sm">${esc(o.t)}</span>`).join(' ')}</div>` : '';
+  };
+  ST.sectionHtml = function (d) {
+    if (!d) return '<div class="muted">수익 구간 추적 데이터 없음</div>';
+    const lab = {candidate: '🔍 후보 (전진 추적 중)', validated: '💰 검증 통과', dropped: '탈락'};
+    const rows = (d.tracks || []).map(t => `<tr><td>${esc(t.fam)} · ${esc(t.dim_ko)}<br><b>${esc(t.value)}</b></td><td>${lab[t.status] || esc(t.status)}</td><td>${esc(t.flagged_day)}</td>
+      <td>${t.fwd_n || 0}건 ${t.fwd_hits || 0}적중<br>ROI ${pct(t.fwd_roi)} (하한 ${pct(t.fwd_lo)})</td><td>${t.past && t.past.all ? `${t.past.all.n}건 ROI ${pct(t.past.all.roi)}` : '–'}</td></tr>`).join('');
+    const top = (d.top_all || []).slice(0, 6).map(s => `<tr><td>${esc(s.seg.replace(/\|/g, ' · '))}</td><td>${s.n}</td><td>${pct(s.roi)}</td><td>${pct(s.lo)}</td><td>${s.q != null ? s.q.toFixed(2) : '–'}</td></tr>`).join('');
+    return `<div class="card"><div class="sub">${esc(d.rules || '')}</div><div class="sub">업데이트 ${esc(d.updated_kst || '–')} KST · 채점 픽 ${d.n_rows || 0}건 · 검정 ${d.n_tested || 0}개</div>
+      ${rows ? `<div class="tw"><table class="mt"><thead><tr><th>구간</th><th>상태</th><th>후보 지정</th><th>전진(실전) 성적</th><th>과거 전체</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : '<div class="sub"><b>현재 후보 없음</b> — 기준(n≥50, 신뢰구간 하한>0 또는 q<0.1)을 넘는 구간이 아직 없습니다.</div>'}
+      <details><summary>참고: ROI 상위 구간 (n≥50, 전체 기간 — 아직 유의하지 않음)</summary><div class="tw"><table class="mt"><thead><tr><th>구간</th><th>n</th><th>ROI</th><th>95% 하한</th><th>q</th></tr></thead><tbody>${top}</tbody></table></div></details></div>`;
+  };
+
+  /* 🩼 결장 (pre-kickoff data already on the proto card: m.players.out = NBA/ESPN injuries; m.ext 🩺 = KBL/WKBL/V리그 box scores) */
+  ST.absences = function (m) {
+    if (!m) return [];
+    const out = [], sideName = sd => sd === '홈' ? m.home : sd === '원정' ? m.away : sd;
+    const by = {};
+    ((m.players || {}).out || []).forEach(x => {
+      if (!/^(Out|Doubtful|IR|Injured Reserve|Suspended|결장|아웃)/i.test(String(x.why || '')) && m.sport !== 'soccer') return;
+      const t = sideName(x.side) || ''; (by[t] = by[t] || []).push({n: x.name + (/Doubtful/i.test(x.why) ? '(D)' : ''), st: x.starter === true ? 1 : x.starter === false ? 0 : null});
+    });
+    ((m.ext || {}).lines || []).filter(l => l.icon === '🩺').forEach(l => {
+      const body = String(l.text).replace(/^[^·]*·\s*/, '').replace(/\s*·\s*참고용.*$/, '');
+      body.split(' / ').forEach(seg => {
+        const i = seg.indexOf(':'); if (i < 0) return;
+        const t = seg.slice(0, i).trim();
+        seg.slice(i + 1).replace(/\[.*?\]/g, '').split(';').forEach(it => {
+          it = it.trim(); let mm;
+          if ((mm = it.match(/^(.*?)\s*직전 경기 결장/))) (by[t] = by[t] || []).push({n: mm[1].replace(/^주전\S*\s*/, ''), st: 1});
+          else if ((mm = it.match(/^(.*?)\s*출전 급감/))) (by[t] = by[t] || []).push({n: mm[1].replace(/^주전\S*\s*/, '') + '↓', st: 1});
+        });
+      });
+    });
+    Object.entries(by).forEach(([t, ns]) => ns.length && (() => { const sn = new Set(), u = ns.filter(x => !sn.has(x.n) && sn.add(x.n)); u.sort((a, b) => (b.st === 1) - (a.st === 1)); out.push({team: t, names: u}); })());
+    return out;
+  };
+  const tagN = x => x.st === 1 ? `<span class="hl-st">주전</span> <b class="hl-stn">${esc(x.n)}</b>` : x.st === 0 ? `<span class="hl-bk">후보</span> ${esc(x.n)}` : esc(x.n);
+  ST.absHtml = function (m) {
+    const a = ST.absences(m); if (!a.length) return '';
+    return `<div class="hl-abs" title="경기 전 결장·출전 급감 정보 (참고용, 확률 미반영) · 주전=평균 출전시간 상위(NBA 24분↑·KBL 20분↑)/핵심 선수 · ↓ 출전 급감 · (D) 출전 의문">🩼 결장: ${a.map(x => `<b>${esc(x.team)}</b> ${x.names.slice(0, 6).map(tagN).join(', ')}${x.names.length > 6 ? ` 외 ${x.names.length - 6}` : ''}`).join(' · ')}</div>`;
+  };
+  /* prominent strip at the top of a proto card */
+  ST.topHtml = function (m) {
+    const seg = ST.cardHtml(m).replace(/^<div class="mc-src">|<\/div>$/g, '');
+    const ab = ST.absHtml(m);
+    return seg || ab ? `<div class="hl-strip">${seg ? `<div class="hl-seg">${seg}</div>` : ''}${ab}</div>` : '';
+  };
+  /* 예측성적 item r {sport, league, home, away, bet_type, p, odds}; R = current round (matches) for absences */
+  ST.recHtml = function (r, R) {
+    if (!r) return '';
+    const seg = ST.badge({fam: '일반', sport: r.sport, league: r.league, bet_type: r.bet_type, p: r.p, odds: r.odds});
+    const m = R && (R.matches || []).find(x => x.home === r.home && x.away === r.away);
+    const ab = m ? ST.absHtml(m) : '';
+    return seg || ab ? `<div class="hl-strip">${seg ? `<div class="hl-seg">${seg}</div>` : ''}${ab}</div>` : '';
+  };
+  if (typeof document !== 'undefined' && document.head && !document.getElementById('hlCss')) {
+    const st = document.createElement('style'); st.id = 'hlCss';
+    st.textContent = `.hl-strip{margin:4px 0 6px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.hl-seg .srcl{display:inline-block;font-weight:800;font-size:13px;padding:3px 10px;border-radius:999px;background:#facc15;color:#1a1a1a;border:0;box-shadow:0 0 0 2px rgba(250,204,21,.35)}
+.hl-seg .srcl.src-ok{background:#16a34a;color:#fff;box-shadow:0 0 0 2px rgba(22,163,74,.4)}
+.hl-seg .muted{font-weight:600}
+.hl-abs{font-size:12.5px;line-height:1.45;font-weight:600;padding:5px 9px;border-radius:8px;background:#7f1d1d;color:#fff;border-left:4px solid #f87171;overflow-wrap:anywhere}
+.hl-abs b{color:#fde68a;font-weight:800}
+.hl-st{display:inline-block;font-size:11px;font-weight:900;padding:0 5px;border-radius:4px;background:#facc15;color:#1a1a1a}
+.hl-bk{display:inline-block;font-size:11px;padding:0 5px;border-radius:4px;background:rgba(255,255,255,.18);color:#e5e7eb}`;
+    document.head.appendChild(st);
+  }
+  ST.load().then(() => { try { if (typeof sport !== 'undefined' && sport === 'proto' && typeof protoLoad === 'function') protoLoad(); if (typeof window.recRerender === 'function') window.recRerender(); } catch (e) {} });
+  if (typeof module !== 'undefined') module.exports = ST;
+})();

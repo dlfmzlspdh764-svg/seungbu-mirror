@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "실시간 승부 예측",
+  "short_name": "승부예측",
+  "description": "실시간 스포츠 승리 확률 · 프로토 승부식 분석 (통계적 추정치, 베팅 권유 아님)",
+  "lang": "ko-KR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "theme_color": "#0f1420",
+  "background_color": "#0f1420",
+  "categories": ["sports"],
+  "icons": [
+    {"src": "static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "static/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
